@@ -1,0 +1,14 @@
+# 앙피지 고지도 미감에 맞춘 테마 + 배포 서버 설정.
+[theme]
+base = "light"
+primaryColor = "#2f6f7a"             # 청록(플레이어 경로)
+backgroundColor = "#f3ece0"          # 양피지
+secondaryBackgroundColor = "#e9ddbf" # 사이드바
+textColor = "#3a2f1d"                # 먹빛
+font = "serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

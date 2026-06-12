@@ -1,0 +1,8 @@
+# 배포(Streamlit Community Cloud)용 고정 버전 — 로컬 테스트 환경과 동일.
+# ※ Python은 3.12 권장(Community Cloud 고급설정에서 선택). 로컬 3.14는 클라우드 미지원이고
+#   qiskit 휠 호환을 위해 3.12를 쓴다. 3.11~3.13이면 동작.
+streamlit==1.58.0
+numpy==2.4.6
+networkx==3.6.1
+qiskit==2.4.1
+qiskit-optimization==0.7.0

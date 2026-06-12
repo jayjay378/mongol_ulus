@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 가상환경 (배포 시 requirements.txt로 재설치)
+.venv/
+venv/
+env/
+
+# 빌드 전용 캐시 — 런타임 불필요(난이도·지오는 geo.json에 이미 구워짐).
+# geobuild.py 재실행 시에만 필요(Natural Earth 데이터·표고 캐시).
+_geocache/
+
+# Streamlit 비밀키 (배포 시 노출 방지)
+.streamlit/secrets.toml
+
+# Claude Code 개인 로컬 설정(권한 등) — 공유 안 함. launch.json은 둔다.
+.claude/settings.local.json
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
