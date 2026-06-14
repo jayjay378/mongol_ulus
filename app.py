@@ -16,7 +16,7 @@ CITIES = DATA["cities"]; GHOSTS = DATA["ghosts"]
 _geo_path = os.path.join(HERE, "geo.json")
 GEO = json.load(open(_geo_path, encoding="utf-8")) if os.path.exists(_geo_path) else {}
 # iframe엔 그릴 것만(해안선·강·호수). 바다 마스크 비트(수십 KB)는 Python(terrain)만 쓰므로 제외.
-GEO_VIEW = {k: GEO[k] for k in ("land", "lakes", "rivers", "heat") if k in GEO}
+GEO_VIEW = {k: GEO[k] for k in ("land", "lakes", "rivers", "heat", "yampaths") if k in GEO}
 _info_path = os.path.join(HERE, "cities_info.json")
 CITY_INFO = json.load(open(_info_path, encoding="utf-8")) if os.path.exists(_info_path) else {}
 _pedia_path = os.path.join(HERE, "pedia.json")

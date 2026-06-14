@@ -179,6 +179,8 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     (GEO.land||[]).forEach(function(d){ gg.appendChild(el("path",{d:d,fill:"var(--parchment)",stroke:"var(--ink-soft)","stroke-width":"0.8","stroke-linejoin":"round","stroke-linecap":"round"})); });
     (GEO.lakes||[]).forEach(function(d){ gg.appendChild(el("path",{d:d,fill:"var(--sea)","fill-opacity":"0.85",stroke:"#6f8c88","stroke-width":"0.5"})); });
     (GEO.rivers||[]).forEach(function(d){ gg.appendChild(el("path",{d:d,fill:"none",stroke:"#7f9a96","stroke-width":"0.7","stroke-linejoin":"round","stroke-linecap":"round",opacity:"0.65"})); });
+    // 역참(yam) 본선 — 옅은 금색 점선(옛 역참로). 엘치는 이 길 위에서만 압도적으로 빠르다.
+    (GEO.yampaths||[]).forEach(function(d){ gg.appendChild(el("path",{d:d,fill:"none",stroke:"var(--gold)","stroke-width":"1.0","stroke-dasharray":"4 4","stroke-linejoin":"round","stroke-linecap":"round",opacity:"0.45"})); });
   })();
 
   // ---- 백과사전 시스템 (우상단 팝업: 색인 + 본문). 일반 항목=PEDIA, 도시 항목=INFO 자동. ----

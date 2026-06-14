@@ -32,6 +32,7 @@ else:
     _GX0, _GX1, _GY0, _GY1 = 38, 1242, 106, 708
     _SEABITS = None
 _CW = (_GX1 - _GX0) / _GW; _CH = (_GY1 - _GY0) / _GH
+_YAMBITS = (_GEO.get("yam") or {}).get("bits")   # 역참 도로 비트(yam 격자=sea 격자와 동일 차원). 엘치 시간 할인용.
 
 # ---- 난이도 두 성분 디코드 (base64) ----
 def _decode(d):
@@ -57,15 +58,17 @@ MC, DC = 0.55, 1.0       # 산악→비용, 사막→비용
 # 포로단(산 상대강세·사막약점)의 적성을 반대로 벌려 순열 자체가 달라지게, 관료단은 둘 다 회피.
 #   speed(km/일), rate(비용/km), 지형 적성(1=중립·<1 강세·>1 약점): mtnT,desT,mtnC,desC,
 #   seasonSens(계절 민감도: 1=표준, >1 악천후에 더 취약 — 계절 스윙을 증폭)
+# yamSpeed: 역참 도로 위 셀의 시간비용 배율(<1=빨라짐). 엘치는 환마로 도로 위에서만 압도적,
+#   벗어나면 일반 기수 속도. 다른 주체는 도로 혜택이 작다(자기 보속·지형 논리가 지배).
 MODES = {
-    # 황제의 역참(yam) 특사: 30리마다 환마로 압도적 속도. 산악은 느려지나 사막은 역참 급수로 견딤. 비용 막대.
-    "엘치":   dict(speed=250.0, rate=13.0, mtnT=1.7, desT=1.1, mtnC=1.5, desC=1.2, seasonSens=1.1),
+    # 황제의 역참(yam) 특사: 역참 환마 → *도로 위에서만* 압도적 속도(off-road는 일반 기수 ~80km/일). 비용 막대.
+    "엘치":   dict(speed=80.0,  rate=13.0, mtnT=1.7, desT=1.1, mtnC=1.5, desC=1.2, seasonSens=1.1, yamSpeed=0.32),
     # 제국 공인 대상 길드(ortogh): 낙타 상단. 사막 관통 강세·산악 약점. 연중 운행이라 계절에 둔감.
-    "오르톡": dict(speed=30.0,  rate=2.5,  mtnT=1.6, desT=0.4, mtnC=1.4, desC=0.4, seasonSens=0.8),
+    "오르톡": dict(speed=30.0,  rate=2.5,  mtnT=1.6, desT=0.4, mtnC=1.4, desC=0.4, seasonSens=0.8, yamSpeed=0.9),
     # 칸의 호구 조사 관료단: 장부·서기·호위·문서함 대동. 산·사막 모두 최악, 악천후에 가장 취약.
-    "관료단": dict(speed=40.0,  rate=5.0,  mtnT=2.1, desT=1.7, mtnC=1.8, desC=1.6, seasonSens=1.7),
+    "관료단": dict(speed=40.0,  rate=5.0,  mtnT=2.1, desT=1.7, mtnC=1.8, desC=1.6, seasonSens=1.7, yamSpeed=0.85),
     # 강제 이주 기술자·포로 집단: 도보. 산은 상대적으로 통과(고개)·사막은 가혹. 최저 비용, 겨울 노출에 취약.
-    "포로단": dict(speed=15.0,  rate=1.0,  mtnT=1.25, desT=1.5, mtnC=1.15, desC=1.4, seasonSens=1.5),
+    "포로단": dict(speed=15.0,  rate=1.0,  mtnT=1.25, desT=1.5, mtnC=1.15, desC=1.4, seasonSens=1.5, yamSpeed=0.95),
 }
 # 순행 주체 한 줄 설명(사이드바 캡션·교육용)
 MODE_DESC = {
@@ -95,6 +98,7 @@ def _to_cell(x, y):
     return (min(_GW - 1, max(0, int((x - _GX0) / (_GX1 - _GX0) * _GW))),
             min(_GH - 1, max(0, int((y - _GY0) / (_GY1 - _GY0) * _GH))))
 def _is_water(i, j): return _SEABITS is not None and _SEABITS[i * _GH + j] == "1"
+def _is_road(i, j): return _YAMBITS is not None and _YAMBITS[i * _GH + j] == "1"
 def _land_cell(i, j):
     if not _is_water(i, j): return (i, j)
     for r in range(1, 12):
@@ -136,7 +140,9 @@ def _grid_for(mode, priority, season):
                 if _is_water(i, j): g[i][j] = SEA_BLOCK
                 elif priority == "최단":     g[i][j] = PXKM
                 elif priority == "최저비용": g[i][j] = PXKM * M["rate"] * cm[i][j]
-                else:                        g[i][j] = PXKM * tm[i][j] / M["speed"]  # 최속
+                else:                                                  # 최속
+                    g[i][j] = PXKM * tm[i][j] / M["speed"]
+                    if _is_road(i, j): g[i][j] *= M.get("yamSpeed", 1.0)  # 역참로 위 시간 단축(엘치 큼)
         _GRID_CACHE[key] = g
     return _GRID_CACHE[key]
 
@@ -180,12 +186,14 @@ def _simplify(pts, eps=4.0):
 def _path_metrics(cellpath, mode, season):
     """경로(셀 시퀀스)의 3지표: (거리 km, 시간 일, 비용 관)."""
     tm, cm = _mults(mode, season); M = MODES.get(mode, MODES[DEFAULT_MODE])
+    ys = M.get("yamSpeed", 1.0)
+    def _tr(i, j): return tm[i][j] * (ys if _is_road(i, j) else 1.0)   # 역참로 위 시간 단축 반영
     km = days = coin = 0.0
     for a in range(len(cellpath) - 1):
         i, j = cellpath[a]; ni, nj = cellpath[a + 1]
         stepkm = math.hypot((ni - i) * _CW, (nj - j) * _CH) * PXKM
         km += stepkm
-        days += stepkm * (tm[i][j] + tm[ni][nj]) * 0.5 / M["speed"]
+        days += stepkm * (_tr(i, j) + _tr(ni, nj)) * 0.5 / M["speed"]
         coin += stepkm * M["rate"] * (cm[i][j] + cm[ni][nj]) * 0.5
     return km, days, coin
 

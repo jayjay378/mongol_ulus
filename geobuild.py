@@ -66,6 +66,24 @@ BARRIERS_LL = [
  ("치롄산맥",      37.8, 99.0, 2.2, 3.6), ("헝두안산맥",  28.2,101.0, 2.2, 4.2),
 ]
 
+# ---- 역참(yam) 주요 간선: 실제 회랑을 따르는 lat/lon 폴리라인. 격자에 래스터화해 도로 레이어로. ----
+# 엘치(역참 특사)는 이 도로 위에서만 최고속(terrain이 시간비용 할인). 역사적 본선 위주.
+YAM_LL = [
+ [(39.90,116.40),(42.36,116.18),(45.0,110.0),(47.20,102.83)],                    # 초원로: 대도-상도-카라코룸
+ [(39.90,116.40),(36.65,117.00),(34.80,114.31),(32.01,112.12),(30.27,120.16)],   # 대운하 회랑: 대도-제남-개봉-양양-임안
+ [(34.27,108.95),(38.49,106.23),(39.5,99.0),(40.5,94.0),(42.95,89.18)],          # 하서주랑: 경조-영하-(회랑)-고창
+ [(42.95,89.18),(43.83,87.62),(41.7,82.9),(40.5,79.0),(39.47,75.99)],            # 타림 북도: 고창-우루무치-카슈가르
+ [(40.5,94.0),(38.0,85.0),(37.11,79.93),(38.42,77.27),(39.47,75.99)],            # 타림 남도: (회랑)-호탄-야르칸드-카슈가르
+ [(39.47,75.99),(42.85,68.30),(42.90,71.39),(39.65,66.96),(39.77,64.42),(37.66,62.19)],  # 트란스옥시아나: 카슈가르-오트라르-타라즈-사마르칸트-부하라-메르브
+ [(37.66,62.19),(36.21,58.80),(36.27,50.00),(38.08,46.29),(33.31,44.36)],        # 호라산: 메르브-니샤푸르-카즈빈-타브리즈-바그다드
+ [(38.08,46.29),(41.72,44.79),(42.06,48.29),(46.35,48.04),(47.20,47.80)],        # 캅카스 철문: 타브리즈-트빌리시-데르벤트-아스트라한-사라이
+ [(47.20,47.80),(45.0,54.0),(42.33,59.15),(39.77,64.42)],                        # 호라즘: 사라이-(카스피북안)-우르겐치-부하라
+ [(47.20,47.80),(51.50,46.00),(54.98,49.04)],                                    # 볼가: 사라이-우케크-불가르
+ [(47.20,47.80),(47.11,39.42),(45.03,35.38),(50.45,30.52)],                      # 흑해/크림: 사라이-아조프-카파-키예프
+ [(50.45,30.52),(54.78,32.05),(55.75,37.62),(56.13,40.41)],                      # 루스: 키예프-스몰렌스크-모스크바-블라디미르
+ [(55.75,37.62),(58.52,31.27)],                                                  # 모스크바-노브고로드
+]
+
 # 사막(건조)은 실제 표고(DEM)로 안 잡히므로 실제 위치의 존(zone)으로 가산. (이름, lat, lon, 반경°, 세기)
 DESERTS_LL = [
     ("타클라마칸", 38.6, 83.0, 3.2, 3.0), ("고비", 42.5, 104.0, 4.6, 2.6),
@@ -229,6 +247,29 @@ def build_seamask(land_rings, land_holes, lake_rings, empire_ring, exclude_ring)
     blocked = bits.count("1")
     return {"w": SEA_W, "h": SEA_H, "x0": SEA_X0, "x1": SEA_X1, "y0": SEA_Y0, "y1": SEA_Y1, "bits": bits}, blocked
 
+def build_yammask(yam_ll, R=1):
+    """역참 폴리라인을 sea와 동일 격자에 래스터화(버퍼 R셀). 1=도로 셀. terrain이 시간비용 할인에 사용."""
+    grid = [[0] * SEA_H for _ in range(SEA_W)]
+    cw = (SEA_X1 - SEA_X0) / SEA_W; ch = (SEA_Y1 - SEA_Y0) / SEA_H
+    def cell(x, y):
+        return (max(0, min(SEA_W - 1, int((x - SEA_X0) / (SEA_X1 - SEA_X0) * SEA_W))),
+                max(0, min(SEA_H - 1, int((y - SEA_Y0) / (SEA_Y1 - SEA_Y0) * SEA_H))))
+    def mark(x, y):
+        ci, cj = cell(x, y)
+        for di in range(-R, R + 1):
+            for dj in range(-R, R + 1):
+                ni, nj = ci + di, cj + dj
+                if 0 <= ni < SEA_W and 0 <= nj < SEA_H: grid[ni][nj] = 1
+    for line in yam_ll:
+        px = [project(la, lo) for (la, lo) in line]
+        for k in range(len(px) - 1):
+            x1, y1 = px[k]; x2, y2 = px[k + 1]
+            steps = int(max(abs(x2 - x1) / cw, abs(y2 - y1) / ch)) * 2 + 1
+            for t in range(steps + 1):
+                mark(x1 + (x2 - x1) * t / steps, y1 + (y2 - y1) * t / steps)
+    bits = "".join(str(grid[i][j]) for i in range(SEA_W) for j in range(SEA_H))
+    return {"w": SEA_W, "h": SEA_H, "x0": SEA_X0, "x1": SEA_X1, "y0": SEA_Y0, "y1": SEA_Y1, "bits": bits}, bits.count("1")
+
 # ---- 실제 표고(DEM) → 난이도 그리드 ----
 ELEV_W, ELEV_H = 120, 72   # 표고 샘플 격자(opentopodata ETOPO1, 캐시)
 ELEV_CACHE = os.path.join(CACHE, "elev_%dx%d.json" % (ELEV_W, ELEV_H))
@@ -337,6 +378,8 @@ def main():
                                      empire_ring, exclude_ring)
     mtn, des = build_difficulty()
     heatgrid = [[1.0 + mtn[i][j] + des[i][j] for j in range(SEA_H)] for i in range(SEA_W)]  # 평시 합성(음영용)
+    yammask, road_cells = build_yammask(YAM_LL)         # 역참 도로 라스터(terrain 시간할인용)
+    yampaths = [d for d in (to_d([(lo, la) for (la, lo) in line], False, 1.0) for line in YAM_LL) if d]  # 렌더용 SVG path
     geo = {
         "meta": {"bbox": [LON0, LAT0, LON1, LAT1], "proj": [OX, OY, S, COSL, LON0, LAT1]},
         "land":   collect_polys("ne_50m_land.geojson", 1.2),
@@ -344,6 +387,8 @@ def main():
         "rivers": collect_lines("ne_50m_rivers_lake_centerlines.geojson", 1.0),
         "barriers": barriers,            # 폴백/참고용
         "sea": sea,                      # 통행 마스크(바다+제국밖)
+        "yam": yammask,                  # 역참 도로 라스터(terrain만 — 엘치 시간 할인)
+        "yampaths": yampaths,            # 역참 노선 SVG path(iframe 렌더)
         "mtn": encode_diff(mtn),         # 산악 성분(경사+고도) — terrain이 지표별로 가중
         "des": encode_diff(des),         # 사막 성분(건조)
         "heat": downsample_heat(heatgrid),  # 난이도 음영 시각용(iframe)
@@ -360,6 +405,8 @@ def main():
           "barriers:", len(barriers), "| S=%.2f px/°" % S)
     print("통행 마스크 %dx%d, 불가 셀 %d/%d (%.0f%%)" % (sea["w"], sea["h"], water_cells,
           sea["w"]*sea["h"], 100.0*water_cells/(sea["w"]*sea["h"])))
+    print("역참 도로: 노선 %d개, 도로 셀 %d/%d (%.1f%%), 렌더 path %d개" % (
+          len(YAM_LL), road_cells, sea["w"]*sea["h"], 100.0*road_cells/(sea["w"]*sea["h"]), len(yampaths)))
     print("mtn 성분: 히말라야 %.1f 티베트 %.1f 파미르 %.1f 평지 %.1f | des 성분: 타클라마칸 %.1f 시리아 %.1f 카라쿰 %.1f" % (
         at(mtn,29,86), at(mtn,33,88), at(mtn,38,73), at(mtn,50,32), at(des,38.6,83), at(des,33,40), at(des,39,59)))
     # 경계 밖 도시 점검
