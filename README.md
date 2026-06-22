@@ -35,6 +35,8 @@ Windows에서 `python`이 Store 더미면 venv 직접 사용: `.venv\Scripts\str
   → `map_data.json`·`geo.json` 생성 (표고는 opentopodata ETOPO1, `_geocache/`에 1회 캐시)
 - `opening_map.json` — 오프닝 시네마틱 전용 실제 지도(제노바~대도 해안선·노드, 별도 좌표계). `openbuild.py` 산출물
 - `openbuild.py` — 오프라인 빌드: 캐시된 Natural Earth만으로 오프닝 지도 생성(`py openbuild.py`). **네트워크·메인 지도 재생성 불필요**
+- `sounds/` — 효과음·배경음악(선택). `page`(책 넘기는 소리)·`bgm`·`select`·`arrive`·`star` 이름의 오디오 파일을 넣으면
+  자동 인식(상단 `sounds/README.md` 참고). base64로 내장돼 별도 서버 설정 없이 동작. 우상단 🔊 버튼으로 음소거.
 
 흐름은 Python → HTML 단방향(서버 분리 없음). 양자는 Python이 담당.
 지도는 **1275년 팍스 몽골리카 75개 도시**를 실제 위경도로 투영해 양피지 화풍으로 렌더(Natural Earth, PD).

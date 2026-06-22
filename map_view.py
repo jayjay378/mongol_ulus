@@ -6,8 +6,9 @@ import json
 
 def build_map(cities, ghosts, selected, answer, start=None, show_ghosts=False,
               terrain=False, costs=None, barriers=None, cr=None, cart_center=None, geo=None, info=None, pedia=None, paths=None,
-              force_mode=None, metrics=None, orbis=None, scenario=None, city_scenes=None, opening_map=None, story=None):
+              force_mode=None, metrics=None, orbis=None, scenario=None, city_scenes=None, opening_map=None, story=None, sounds=None):
     return (TEMPLATE
+            .replace("%%SOUNDS%%", json.dumps(sounds or {}, ensure_ascii=False))
             .replace("%%STORY%%", json.dumps(story or None, ensure_ascii=False))
             .replace("%%OPENMAP%%", json.dumps(opening_map or {}, ensure_ascii=False))
             .replace("%%CITYSCENES%%", json.dumps(city_scenes or {}, ensure_ascii=False))
@@ -61,6 +62,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   .pediaBtn{ position:absolute; right:16px; top:16px; width:40px; height:34px; z-index:7;
     border:1px solid var(--ink-soft); background:rgba(233,221,191,.94); border-radius:4px; cursor:pointer; font-size:17px; }
   .pediaBtn:hover{ background:rgba(233,221,191,1); }
+  .sndBtn{ right:62px; width:36px; font-size:15px; }
   .pedia{ right:16px; top:16px; width:368px; max-height:calc(100% - 32px); z-index:7; display:none;
     flex-direction:column; padding:0; overflow:hidden; }
   .pedia.show{ display:flex; }
@@ -236,6 +238,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     <button id="mExplore" class="on" title="도시를 눌러 역사 설명 보기">탐험</button><button id="mDraw" title="강조된 도시를 순서대로 눌러 순행로 작성">순행 그리기</button>
   </div>
   <button class="pediaBtn" id="pediaBtn" title="백과사전">&#128214;</button>
+  <button class="pediaBtn sndBtn" id="sndBtn" title="소리 끄기">&#128266;</button>
   <button class="panel titleBtn" id="toTitle" title="타이틀(모드 선택)로">&#9776; 타이틀</button>
   <div class="panel pedia" id="pedia">
     <div class="pHd"><b id="pTitle">백과사전</b><button class="pX" id="pX" title="닫기">&#10005;</button></div>
@@ -272,10 +275,31 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   </svg></div>
 <script>
   var CITIES=%%CITIES%%, GHOSTS=%%GHOSTS%%, SELECTED=%%SELECTED%%, START=%%START%%, ANSWER=%%ANSWER%%;
-  var TERRAIN=%%TERRAIN%%, COSTS=%%COSTS%%, BARRIERS=%%BARRIERS%%, CR=%%CR%%, CARTCENTER=%%CARTCENTER%%, GEO=%%GEO%%, INFO=%%INFO%%, PEDIA=%%PEDIA%%, PATHS=%%PATHS%%, FORCEMODE=%%FORCEMODE%%, METRICS=%%METRICS%%, ORBIS=%%ORBIS%%, SCENARIO=%%SCENARIO%%, CITYSCENES=%%CITYSCENES%%, OPENMAP=%%OPENMAP%%, STORY=%%STORY%%;
+  var TERRAIN=%%TERRAIN%%, COSTS=%%COSTS%%, BARRIERS=%%BARRIERS%%, CR=%%CR%%, CARTCENTER=%%CARTCENTER%%, GEO=%%GEO%%, INFO=%%INFO%%, PEDIA=%%PEDIA%%, PATHS=%%PATHS%%, FORCEMODE=%%FORCEMODE%%, METRICS=%%METRICS%%, ORBIS=%%ORBIS%%, SCENARIO=%%SCENARIO%%, CITYSCENES=%%CITYSCENES%%, OPENMAP=%%OPENMAP%%, STORY=%%STORY%%, SOUNDS=%%SOUNDS%%;
   var NS="http://www.w3.org/2000/svg";
   function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
   var byName={}; CITIES.forEach(function(c){byName[c.n]=c;});
+
+  // ---- 사운드(효과음·BGM): 파일은 sounds/ 폴더(page/bgm/select/arrive/star). 브라우저 정책상 첫 클릭에 해제. ----
+  var __muted=false, __bgm=null, __sndReady=false;
+  try{ __muted = localStorage.getItem("mongolMute")==="1"; }catch(e){}
+  function __sfx(name){ if(__muted||!SOUNDS||!SOUNDS[name]) return; try{ var a=new Audio(SOUNDS[name]); a.volume=0.7; a.play().catch(function(){}); }catch(e){} }
+  function __startBgm(){ if(!SOUNDS||!SOUNDS.bgm||__muted) return; if(!__bgm){ __bgm=new Audio(SOUNDS.bgm); __bgm.loop=true; __bgm.volume=0.38; } __bgm.play().catch(function(){}); }
+  function __unlock(){ if(__sndReady) return; __sndReady=true; __startBgm(); }
+  window.addEventListener("pointerdown", __unlock);   // 첫 사용자 제스처에 오디오 해제 + BGM 시작
+  window.__sfx=__sfx;
+  // 타이틀(별자리) 동안 부모 페이지 배경까지 밤하늘로(같은 출처라 접근 가능, 막히면 무해). 모드 진입 시 복귀.
+  function __pageBg(dark){ try{ var pd=window.parent.document;
+    var app=pd.querySelector('[data-testid="stApp"]')||pd.querySelector('.stApp');
+    if(app) app.style.background = dark ? "#070b1c" : "";
+    pd.body.style.background = dark ? "#070b1c" : "";
+  }catch(e){} }
+  (function(){ var b=document.getElementById("sndBtn"); if(!b) return;
+    function upd(){ b.textContent=__muted?"🔇":"🔊"; b.title=__muted?"소리 켜기":"소리 끄기"; }
+    upd();
+    b.onclick=function(){ __muted=!__muted; try{ localStorage.setItem("mongolMute", __muted?"1":"0"); }catch(e){}
+      if(__muted){ if(__bgm) __bgm.pause(); } else { __sndReady=true; __startBgm(); } upd(); };
+  })();
 
   // ---- 실제 지리 베이스맵(양피지 화풍): 바다 바탕 + 육지(양피지) + 호수 + 강. 최하단 레이어. ----
   (function(){ var gg=document.getElementById("geo"); if(!gg||!GEO||!GEO.land) return;
@@ -303,7 +327,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
       body.className="pBody"; body.innerHTML=h;
       [].forEach.call(body.querySelectorAll(".ent"),function(el){ el.onclick=function(){ openKey(el.getAttribute("data-k")); }; });
     }
-    function article(title,sub,bd){ body.className="pBody";
+    function article(title,sub,bd){ body.className="pBody"; if(window.__sfx) window.__sfx("page");   // 책장 넘기는 소리
       body.innerHTML='<span class="back">&#8249; 목록</span><div class="anm">'+esc(title)+'</div>'+
         (sub?'<div class="arg">'+esc(sub)+'</div>':'')+'<div class="abd">'+esc(bd)+'</div>';
       body.querySelector(".back").onclick=index; }
@@ -729,6 +753,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     // 범용 연출 재생: 오프닝·도착·보고(closing) 모두 같은 오버레이로.
     function playScene(sc, tag, btnLabel, cont){
       if(!sc){ cont(); return; }
+      if(window.__sfx) window.__sfx("page");   // 책 넘기는 소리(도착·보고 연출 카드)
       csTtl.textContent=sc.title||""; csTag.textContent=tag||"연 출";
       csBody.innerHTML=""; (sc.lines||[]).forEach(function(ln){ var p=document.createElement("div"); p.className="csLine"; p.textContent=ln||""; csBody.appendChild(p); });
       if(sc.img){ csArt.style.backgroundImage="url('"+sc.img+"')"; csArt.textContent=""; csArt.classList.add("hasimg"); }
@@ -792,9 +817,9 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         d+="C"+(p1.x+(p2.x-p0.x)/6)+","+(p1.y+(p2.y-p0.y)/6)+" "+(p2.x-(p3.x-p1.x)/6)+","+(p2.y-(p3.y-p1.y)/6)+" "+p2.x+","+p2.y; }
       return d; }
     var opSky=document.getElementById("opSky"), starfield=document.getElementById("opStarfield");
-    var routeGold=null, caravan=null, built=false, routeOn=false, opLand=null, opCities=null, nodeG={}, OPENONLY={"제노바":1,"베네치아":1};
+    var routeGold=null, caravan=null, built=false, routeOn=false, opLand=null, opCities=null, nodeG={}, OPENONLY={"제노바":1,"베네치아":1,"대도":1};
     function rngOpen(seed){ var s=(seed>>>0)||1; return function(){ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; }; }
-    function setT(elm,op){ if(!elm) return; elm.style.transition="opacity .8s ease"; elm.style.opacity=String(op); }
+    function setT(elm,op,dur){ if(!elm) return; elm.style.transition="opacity "+(dur||0.8)+"s ease"; elm.style.opacity=String(op); }
     function build(){ if(built) return; built=true; cam.innerHTML="";
       // 배경 별무리(밤하늘 ambiance) — 한 번만 생성
       if(starfield && !starfield.childNodes.length){ var r=rngOpen(20260621);
@@ -843,6 +868,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     function runBeats(beats, onDone){ var i=0;
       function advance(){ i++; if(i<beats.length) beat(); else { opening.classList.remove("show"); if(onDone) onDone(); } }
       function beat(){ var b=beats[i]||{}; routeOn=false;   // 매 beat 전환 시 경로 애니 중단
+        if(window.__sfx) window.__sfx("page");   // 책 넘기는 소리(서사 카드 전환)
         opTag.textContent=b.tag||""; opTtl.textContent=b.title||""; opGo.style.display="";
         opBody.innerHTML=""; (b.lines||[]).forEach(function(ln){ var pp=document.createElement("div"); pp.className="opLine"; pp.textContent=ln||""; opBody.appendChild(pp); });
         opGo.textContent=b.btn||"계속 →";
@@ -855,6 +881,10 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
             opTag.textContent=""; opTtl.textContent="";
             opBody.innerHTML="<div class='opLine' style='text-align:center;color:var(--ink-soft)'>"+(b.next_hint||(b.next_node+"를 클릭하세요"))+"</div>";
             opGo.style.display="none";
+            if(b.focus && nodeG[b.focus]){   // 노드 포커스 beat: 떠나는 노드 페이드아웃 + 다음 노드로 카메라 센터링
+              if(b.focus!==b.next_node) setT(nodeG[b.focus], 0);   // 제노바 등 자연스럽게 사라짐
+              var zn=zoomFor(b.next_node); camTo(zn[0], zn[1], zn[2], 1100);   // 베네치아로 센터 이동(수많은 도시→대도는 비-노드 포커스라 넓은 뷰 유지)
+            }
             activateNode(b.next_node, function(){
               if(b.route_on_click && routeGold){   // 대도 클릭 후 노드를 잇는 경로 애니메이션 → 완료(또는 폴백)되면 진행
                 var adv=false; function go(){ if(adv) return; adv=true; if(routeGold) routeGold.setAttribute("stroke-dashoffset", 0); advance(); }
@@ -869,7 +899,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     }
     // 노드 활성화: 페이드 인 + 펄스 링 + 클릭 히트영역. 클릭 시 cb().
     function activateNode(name, cb){ var g=nodeG[name], p=POS[name]; if(!g||!p){ cb(); return; }
-      setT(g,1);
+      setT(g,1,1.0);   // 노드가 천천히 '떠오르며' 등장(시선 유도)
       var pulse=mk("circle",{cx:p.x,cy:p.y,r:"6",fill:"none",stroke:"var(--gold)","stroke-width":"1.5"});
       pulse.appendChild(mk("animate",{attributeName:"r",values:"5;12;5",dur:"1.4s",repeatCount:"indefinite"}));
       pulse.appendChild(mk("animate",{attributeName:"opacity",values:"1;0;1",dur:"1.4s",repeatCount:"indefinite"}));
@@ -880,27 +910,31 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     }
     // 샌드박스 진입: 별→지도 전환 후 오버레이 닫아 본 게임(몽골 제국) 지도 표시.
     function startSandbox(){ try{ localStorage.setItem("mongolEntered","sandbox"); }catch(e){}
-      opening.classList.remove("night"); setT(opSky,0); setT(starfield,0); setT(opLand,1);
-      setTimeout(function(){ opening.classList.remove("show"); }, 850); }
+      __pageBg(false);   // 페이지 배경 밤하늘 해제
+      opening.classList.remove("night"); setT(opSky,0,3.8); setT(starfield,0,3.8); setT(opLand,1,3.8);   // 별→지도 천천히
+      setTimeout(function(){ opening.classList.remove("show"); }, 3900); }
     // 스토리 진입: 메인 지도를 폴로로 교체 + 별→지도 → 1초 후 제노바 줌인 → 독백 beats → 대도서 줌아웃 리빌.
     function startStory(S){ if(window.__applyStory) window.__applyStory(S);
       var mapSvg=document.getElementById("map"), st=byName[(S&&S.start)||"대도"]||byName["대도"];
       mapSvg.classList.add("storyintro"); if(st && window.__focus) window.__focus(st.x-66,st.y-46,st.x+66,st.y+46,0);
       function reveal(){ if(window.__resetView) window.__resetView(1000); setTimeout(function(){ mapSvg.classList.remove("storyintro"); },100); }
-      opening.classList.remove("night"); setT(opSky,0); setT(starfield,0); setT(opLand,1);
+      // 별→지도 전환을 아주 천천히(3.8s) — 별이 도시로 바뀌는 메타포를 충분히 음미하도록.
+      __pageBg(false);   // 페이지 배경 밤하늘 해제(복귀)
+      opening.classList.remove("night"); setT(opSky,0,3.8); setT(starfield,0,3.8); setT(opLand,1,3.8);
       var beats=(S&&S.scenario&&S.scenario.opening&&S.scenario.opening.beats)||[];
-      setTimeout(function(){   // 1초 후: 제노바 페이드 인 → 제노바를 클릭해야 독백 시작
-        if(nodeG["제노바"]) setT(nodeG["제노바"],1);
+      setTimeout(function(){   // 전환 후: 제노바가 '떠오르고' 카메라가 그쪽으로 유도 → 클릭
+        var gp=POS["제노바"]; if(gp) camTo(gp.x, gp.y, 2.2, 1400);   // 제노바로 부드럽게 시선 유도(제노바는 activateNode가 천천히 떠올림)
         opTag.textContent=""; opTtl.textContent="";
         opBody.innerHTML="<div class='opLine' style='text-align:center;color:var(--ink-soft)'>제노바를 클릭해 이야기를 시작하세요</div>";
         opGo.style.display="none";
         if(typeof activateNode==="function") activateNode("제노바", function(){ runBeats(beats, reveal); });
         else runBeats(beats, reveal);
-      }, 1000);
+      }, 4000);
     }
     // 인게임 타이틀(별자리): 스토리 / 샌드박스 선택.
     window.__runTitle=function(S){
       opening.classList.add("show"); opening.classList.add("night"); build();
+      __pageBg(true);   // 타이틀: 페이지 배경까지 밤하늘로
       camTo(CXC, CYC, 1.0, 0);
       setT(opSky,1); setT(starfield,1); setT(opLand,0);
       for(var k in OPENONLY) if(nodeG[k]) setT(nodeG[k],0);   // 제노바·베네치아 숨김(별자리엔 없음)
@@ -910,8 +944,8 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         "<button class='opGo titlechoice' id='tStory'>📖 스토리<span>마르코 폴로의 순행</span></button>"+
         "<button class='opGo titlechoice' id='tSand' style='background:rgba(255,255,255,.14);color:#eee4cf;border-color:#9aa4c0'>🎲 샌드박스<span>자유롭게 도시를 잇다</span></button></div>";
       opGo.style.display="none";
-      document.getElementById("tStory").onclick=function(){ startStory(S); };
-      document.getElementById("tSand").onclick=function(){ startSandbox(); };
+      document.getElementById("tStory").onclick=function(){ if(window.__sfx) window.__sfx("select"); __unlock(); startStory(S); };
+      document.getElementById("tSand").onclick=function(){ if(window.__sfx) window.__sfx("select"); __unlock(); startSandbox(); };
     };
   })();
 

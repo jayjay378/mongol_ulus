@@ -2,7 +2,7 @@
 """칸이 명한 순행로 — Streamlit 앱.
 사이드바에서 순행 도시를 고르고(무작위 선택 지원), Python이 경로를 최적화
 (고전/Brute/양자)해 SVG 고지도에 주입해 그린다. 단방향 흐름."""
-import json, os, random
+import json, os, random, base64
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -30,6 +30,25 @@ except Exception:
 # 오프닝 전용 실제 지도(제노바~대도 해안선·노드). openbuild.py 산출물. 메인 지도와 무관.
 _openmap_path = os.path.join(HERE, "opening_map.json")
 OPENING_MAP = json.load(open(_openmap_path, encoding="utf-8")) if os.path.exists(_openmap_path) else {}
+# 효과음·BGM: sounds/ 폴더의 파일(page/bgm/select/arrive/star)을 base64로 iframe에 주입. 없으면 무음.
+_SND_DIR = os.path.join(HERE, "sounds")
+_SND_MIME = {"mp3": "audio/mpeg", "ogg": "audio/ogg", "wav": "audio/wav", "m4a": "audio/mp4"}
+
+@st.cache_data(show_spinner=False)
+def _load_sounds():
+    out = {}
+    if not os.path.isdir(_SND_DIR):
+        return out
+    for key in ("page", "bgm", "select", "arrive", "star"):
+        for ext in ("mp3", "ogg", "wav", "m4a"):
+            p = os.path.join(_SND_DIR, key + "." + ext)
+            if os.path.exists(p):
+                b64 = base64.b64encode(open(p, "rb").read()).decode()
+                out[key] = "data:%s;base64,%s" % (_SND_MIME[ext], b64)
+                break
+    return out
+
+SOUNDS = _load_sounds()
 # 순행 임무(시나리오): 있으면 사이드바에서 골라 config를 고정하고 별점으로 채점. 없으면 자유 순행만.
 _scen_path = os.path.join(HERE, "scenarios.json")
 try:
@@ -222,10 +241,12 @@ html = build_map(CITIES, GHOSTS, sel, answer, start=start, show_ghosts=show_ghos
                  barriers=(terrain.BARRIERS if terrain_on else []), cr=cr, cart_center=cart_center,
                  geo=GEO_VIEW, info=CITY_INFO, pedia=PEDIA, paths=paths, force_mode=force_mode,
                  metrics=metrics3, orbis=orbis, scenario=scenario_meta, city_scenes=CITY_SCENES,
-                 opening_map=OPENING_MAP, story=STORY)
+                 opening_map=OPENING_MAP, story=STORY, sounds=SOUNDS)
 components.html(html, height=760, scrolling=False)
 
+# 안내 문구는 몰입을 위해 기본 숨김(접이식 도움말). 필요할 때만 펼쳐 본다.
 cap = "지도 상단 토글 — ‘탐험’은 도시를 눌러 역사 설명을, ‘순행 그리기’는 강조 도시를 순서대로 눌러 순행로를 작성한 뒤 ‘채점’합니다. "
 cap += ("거리가 아니라 지형 이동 비용 기준 — 산·사막을 넘는 길이 비쌉니다." if terrain_on
         else "거리는 실제 지리 좌표 기준.")
-st.caption(cap)
+with st.expander("ℹ️ 도움말", expanded=False):
+    st.caption(cap)
