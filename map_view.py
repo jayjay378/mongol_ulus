@@ -6,8 +6,10 @@ import json
 
 def build_map(cities, ghosts, selected, answer, start=None, show_ghosts=False,
               terrain=False, costs=None, barriers=None, cr=None, cart_center=None, geo=None, info=None, pedia=None, paths=None,
-              force_mode=None, metrics=None, orbis=None, scenario=None, city_scenes=None, opening_map=None, story=None, sounds=None):
+              force_mode=None, metrics=None, orbis=None, scenario=None, city_scenes=None, opening_map=None, story=None, sounds=None,
+              relay_terr=None):
     return (TEMPLATE
+            .replace("%%RELAYTERR%%", json.dumps(relay_terr or None, ensure_ascii=False))
             .replace("%%SOUNDS%%", json.dumps(sounds or {}, ensure_ascii=False))
             .replace("%%STORY%%", json.dumps(story or None, ensure_ascii=False))
             .replace("%%OPENMAP%%", json.dumps(opening_map or {}, ensure_ascii=False))
@@ -133,6 +135,24 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   #relaystage .rsRes .stars{ font-size:22px; color:var(--gold); letter-spacing:2px; line-height:1.2; }
   #relaystage .rsRes .stars .off{ color:var(--ink-soft); opacity:.4; }
   #relaystage .rsRes .warn{ color:var(--route); font-weight:700; }
+  /* 역참로 튜토리얼(첫 구간 1회 + ? 버튼) — 비차단 하단 길잡이 카드 */
+  #rsHelp{ position:absolute; right:14px; top:12px; z-index:13; width:26px; height:26px; border-radius:50%;
+    border:1px solid var(--ink-soft); background:rgba(255,255,255,.55); color:var(--ink-soft); cursor:pointer;
+    font-family:"Noto Serif KR",serif; font-size:14px; font-weight:700; line-height:1; }
+  #rsHelp:hover{ background:rgba(255,255,255,.85); color:var(--ink); }
+  #rsTut{ position:absolute; left:50%; bottom:62px; transform:translateX(-50%); width:min(560px,92%); z-index:12; display:none; }
+  #rsTut.show{ display:block; animation:rsTutIn .25s ease; }
+  @keyframes rsTutIn{ from{ opacity:0; transform:translate(-50%,8px);} to{ opacity:1; transform:translate(-50%,0);} }
+  #rsTut .rsTutCard{ background:#f4ecd4; border:1px solid var(--gold); border-radius:9px; padding:12px 16px 11px; box-shadow:0 8px 24px rgba(40,28,12,.28); }
+  #rsTut .rsTutTag{ font-size:10px; letter-spacing:4px; color:var(--gold); font-weight:700; margin-bottom:5px; }
+  #rsTut .rsTutBody{ font-size:13.5px; line-height:1.72; color:var(--ink); }
+  #rsTut .rsTutBody b{ color:var(--route); }
+  #rsTut .rsTutFoot{ display:flex; align-items:center; gap:8px; margin-top:11px; }
+  #rsTut .rsTutDots{ flex:1 1 auto; letter-spacing:3px; color:var(--ink-soft); font-size:12px; }
+  #rsTut .rsTutFoot button{ padding:6px 16px; border:1px solid var(--ink-soft); background:rgba(255,255,255,.55);
+    border-radius:5px; cursor:pointer; font-family:"Noto Serif KR",serif; font-size:12.5px; color:var(--ink); }
+  #rsTut .rsTutFoot button:hover{ background:rgba(255,255,255,.85); }
+  #rsTut .rsTutFoot button.primary{ background:var(--gold); color:#fff; border-color:var(--gold); }
   /* 도착 연출(스토리 모드): 역참 구간 사이에 도착 도시 풍경 장면 */
   #cityscene{ position:absolute; inset:0; z-index:10; display:none; align-items:center; justify-content:center;
     background:radial-gradient(130% 100% at 50% 35%, #efe6cd, #d9c79c); }
@@ -155,13 +175,14 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   svg.map.storyintro #cities .city:not(.startcity){ opacity:0; }
   svg.map.storyintro #ghosts, svg.map.storyintro #answer, svg.map.storyintro #player{ opacity:0; }
   /* 오프닝 시네마틱(스토리): 제노바→베네치아→대도 여정. 전용 SVG 카메라 + 하단 내레이션 카드. */
-  #opening{ position:absolute; inset:0; z-index:11; display:none; flex-direction:column;
-    background:radial-gradient(130% 100% at 50% 32%, #efe6cd, #d7c49f); }
+  /* 컴포넌트 iframe 전체(고정 높이)를 덮는다. map-wrap은 본 지도 비율따라 높이가 변해(짤림/여백) → viewport에 고정. */
+  /* 타이틀(별자리)만 밤하늘(.night), 지도 전환 후엔 양피지/황토 배경(레터박스 하단이 검게 남던 문제 수정). */
+  #opening{ position:fixed; inset:0; z-index:11; display:none; flex-direction:column; background:#d8c8a0; }
   #opening.show{ display:flex; }
   #opening .opMap{ flex:1 1 auto; min-height:0; }
   #opening .opMap svg{ width:100%; height:100%; display:block; }
   #opening .opCard{ flex:0 0 auto; padding:10px 18px 15px; text-align:center;
-    background:linear-gradient(to top, rgba(233,221,191,.97) 72%, rgba(233,221,191,0)); }
+    background:#e9ddbf; border-top:1px solid rgba(70,56,39,.18); }   /* 단색(가독성) — 그라데이션 제거 */
   #opening .opTag{ font-size:11px; letter-spacing:4px; color:var(--gold); font-weight:700; }
   #opening .opTtl{ font-size:20px; font-weight:700; margin-top:2px; }
   #opening .opBody{ font-size:14px; line-height:1.72; color:var(--ink); margin:7px auto 12px; max-width:580px; text-align:left; white-space:pre-wrap; }
@@ -205,9 +226,12 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     </div>
   </div>
   <div id="relaystage">
+    <button id="rsHelp" title="역참로 잇기 도움말">?</button>
     <div class="rsHd"><div class="rsTag">역 참 로</div><div class="rsTtl" id="rsTtl"></div><div class="rsHint" id="rsHint"></div></div>
     <div class="rsStage"><svg id="rsSvg" viewBox="0 0 1000 540" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-label="역참로 미니게임"></svg></div>
     <div class="rsFoot" id="rsFoot"></div>
+    <div id="rsTut"><div class="rsTutCard"><div class="rsTutTag" id="rsTutTag">길잡이</div><div class="rsTutBody" id="rsTutBody"></div>
+      <div class="rsTutFoot"><span class="rsTutDots" id="rsTutDots"></span><button id="rsTutSkip">건너뛰기</button><button class="primary" id="rsTutNext">다음 →</button></div></div></div>
   </div>
   <div id="cityscene"><div class="csInner">
     <div class="csArt" id="csArt">삽 화 자 리</div>
@@ -275,7 +299,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   </svg></div>
 <script>
   var CITIES=%%CITIES%%, GHOSTS=%%GHOSTS%%, SELECTED=%%SELECTED%%, START=%%START%%, ANSWER=%%ANSWER%%;
-  var TERRAIN=%%TERRAIN%%, COSTS=%%COSTS%%, BARRIERS=%%BARRIERS%%, CR=%%CR%%, CARTCENTER=%%CARTCENTER%%, GEO=%%GEO%%, INFO=%%INFO%%, PEDIA=%%PEDIA%%, PATHS=%%PATHS%%, FORCEMODE=%%FORCEMODE%%, METRICS=%%METRICS%%, ORBIS=%%ORBIS%%, SCENARIO=%%SCENARIO%%, CITYSCENES=%%CITYSCENES%%, OPENMAP=%%OPENMAP%%, STORY=%%STORY%%, SOUNDS=%%SOUNDS%%;
+  var TERRAIN=%%TERRAIN%%, COSTS=%%COSTS%%, BARRIERS=%%BARRIERS%%, CR=%%CR%%, CARTCENTER=%%CARTCENTER%%, GEO=%%GEO%%, INFO=%%INFO%%, PEDIA=%%PEDIA%%, PATHS=%%PATHS%%, FORCEMODE=%%FORCEMODE%%, METRICS=%%METRICS%%, ORBIS=%%ORBIS%%, SCENARIO=%%SCENARIO%%, CITYSCENES=%%CITYSCENES%%, OPENMAP=%%OPENMAP%%, STORY=%%STORY%%, SOUNDS=%%SOUNDS%%, RELAYTERR=%%RELAYTERR%%;
   var NS="http://www.w3.org/2000/svg";
   function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
   var byName={}; CITIES.forEach(function(c){byName[c.n]=c;});
@@ -656,81 +680,248 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         sceneEl=document.getElementById("cityscene"), csTtl=document.getElementById("csTtl"), csTag=document.getElementById("csTag"),
         csBody=document.getElementById("csBody"), csArt=document.getElementById("csArt"), csGo=document.getElementById("csGo");
     var W=1000, H=540, MX=92, CY=270, AX=MX, BX=W-MX, DX=BX-AX;       // 스테이지 좌표계
-    var RANGE=Math.round(DX*0.30), NSTA=14, KPICK=4, A0={x:AX,y:CY}, B0={x:BX,y:CY};
-    // 역참 종류(향후 세분화 훅): 지금은 일반 1종. rangeMul=사거리 배율, r=반경, fill=색.
-    var TYPES=[{name:"역참", rangeMul:1.0, r:5.5, fill:"var(--gold)"}];
+    // A0·B0·RB·TF(맵→스테이지 변환)는 구간마다 buildCorridor에서 실제 지형 회랑에 맞춰 재설정된다.
+    var RB=200, A0={x:AX,y:CY}, B0={x:BX,y:CY}, TF=null;   // RB=기본 사거리(구간마다 buildCorridor에서 회랑 길이×0.34)
+    // 역참 종류 — 보급선 = '최소 비용 가변 경로'. 종류마다 사거리(reach)·이동비용(rate)·통행료(toll)가 다르다:
+    //  모린=멀리 가나 비쌈(환마)·테르겐=가까우나 쌈(수레)·나린=중간(보안). 개수는 고정이 아니라 비용 최적화의 결과.
+    var TYPES=[
+      {name:"모린 얌", sub:"말·장거리", tip:"멀리·비쌈", reach:1.55, rate:1.15, toll:1.30, r:6,   fill:"var(--gold)"},
+      {name:"테르겐 얌", sub:"수레·물자", tip:"가깝·저렴", reach:0.72, rate:0.85, toll:0.45, r:5,   fill:"#86813c"},
+      {name:"나린 얌", sub:"밀행·보안", tip:"중간",     reach:1.05, rate:1.00, toll:0.85, r:5.5, fill:"#2f6f7a"}
+    ];
+    // 주체 적성(ORBIS.mode): 적성 종류는 사거리↑(×1.15) + 이동비용·통행료↓(×0.82) → 더 멀리·더 싸게 → 주체마다 최적 보급선이 갈린다.
+    var PREF={"엘치":0,"오르톡":1,"관료단":2,"포로단":1};
+    function persona(){ return (ORBIS&&ORBIS.mode)||"관료단"; }
+    function prefType(){ var p=PREF[persona()]; return (p==null)?-1:p; }
+    // ── 지형 난이도(맵 전역 격자) + 실제 거리(km) ── G2
+    var TOLLKM=200;
+    function _dec(b64){ var s=atob(b64), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+    var TERR=(RELAYTERR&&RELAYTERR.b64)?_dec(RELAYTERR.b64):null, KIND=(RELAYTERR&&RELAYTERR.k)?_dec(RELAYTERR.k):null,
+        DES=(RELAYTERR&&RELAYTERR.des)?_dec(RELAYTERR.des):null, VIA=(RELAYTERR&&RELAYTERR.via)?_dec(RELAYTERR.via):null;
+    function _samp(arr,mx,my){ if(!arr) return 0; var R=RELAYTERR,
+      i=Math.max(0,Math.min(R.w-1,Math.floor((mx-R.x0)/(R.x1-R.x0)*R.w))),
+      j=Math.max(0,Math.min(R.h-1,Math.floor((my-R.y0)/(R.y1-R.y0)*R.h))); return arr[j*R.w+i]/255; }
+    function desMap(mx,my){ return _samp(DES,mx,my); }      // 사막 강도 0..1
+    function viaMap(mx,my){ return VIA?_samp(VIA,mx,my):0.6; } // 사이트 적합도 0..1(高=좋음)
+    function desAlong(u,v){ if(!DES||!TF) return 0; var n=4,s=0;   // hop 위 사막도 평균
+      for(var k=0;k<=n;k++){ var t=k/n, m=toMap({x:u.x+(v.x-u.x)*t,y:u.y+(v.y-u.y)*t}); s+=desMap(m.x,m.y); } return s/(n+1); }
+    var REACHDES=0.55;
+    function effReach(u,v){ return reachOf(u)/(1+REACHDES*desAlong(u,v)); }   // 사막 가로지르면 실효 사거리↓(P1, 완전사막≈÷1.55)
+    function pxkm(){ return (ORBIS&&ORBIS.pxkm)||1; }
+    function toMap(p){ return TF?{x:(p.x-TF.ox)/TF.s+TF.minx, y:(p.y-TF.oy)/TF.s+TF.miny}:p; }   // 스테이지→맵 역변환
+    function hardMap(mx,my){ if(!TERR) return 1.0; var R=RELAYTERR,
+      i=Math.max(0,Math.min(R.w-1,Math.floor((mx-R.x0)/(R.x1-R.x0)*R.w))),
+      j=Math.max(0,Math.min(R.h-1,Math.floor((my-R.y0)/(R.y1-R.y0)*R.h))); return TERR[j*R.w+i]/255*R.scale; }
+    function kindMap(mx,my){ if(!KIND) return 0; var R=RELAYTERR,
+      i=Math.max(0,Math.min(R.w-1,Math.floor((mx-R.x0)/(R.x1-R.x0)*R.w))),
+      j=Math.max(0,Math.min(R.h-1,Math.floor((my-R.y0)/(R.y1-R.y0)*R.h))); return KIND[j*R.w+i]; }
+    function terrMult(u,v){ if(!TERR||!TF) return 1.0; var n=5,s=0;   // hop 위 6점 평균 난이도(평지1·산악·사막↑·바다=불가)
+      for(var k=0;k<=n;k++){ var t=k/n, m=toMap({x:u.x+(v.x-u.x)*t,y:u.y+(v.y-u.y)*t}); s+=hardMap(m.x,m.y); } return s/(n+1); }
+    function kmOf(u,v){ return TF? dist(u,v)/TF.s*pxkm() : dist(u,v); }   // 실제 거리(km)
+    // 노드 사거리·이동비용 rate·통행료. A0/B0(인장)는 .t 없음 → 기본 사거리·rate 1·통행료 0.
+    function reachOf(nd){ if(!nd||nd.t==null) return RB; var ty=TYPES[nd.t]; return RB*ty.reach*(nd.t===prefType()?1.15:1); }
+    function rateOf(nd){ if(!nd||nd.t==null) return 1.0; var ty=TYPES[nd.t]; return ty.rate*(nd.t===prefType()?0.82:1); }
+    function tollOf(nd){ if(!nd||nd.t==null) return 0; var ty=TYPES[nd.t]; return ty.toll*TOLLKM*(nd.t===prefType()?0.82:1); }
+    // 이동 비용 = 실제 거리(km) × 출발 종류 rate × 구간 지형 난이도. 산·사막·바다 횡단은 비싸 → 최적이 쉬운 지형으로 우회.
+    function hopCost(u,v){ return kmOf(u,v)*rateOf(u)*terrMult(u,v); }
     var legs=[], li=0, nodes=[], pick=[], starsArr=[], curA="", curB="", active=false;
     function hash(s){ var h=2166136261; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
     function rng(seed){ var s=(seed>>>0)||1; return function(){ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; }; }
     function clampY(y){ return Math.max(56,Math.min(H-56,y)); }
+    function clampX(x){ return Math.max(38,Math.min(W-38,x)); }
     function dist(p,q){ return Math.hypot(p.x-q.x, p.y-q.y); }
-    // 후보 생성: 보급 가능한 척추 4개(균등+작은 산포)로 실현가능해 보장 + 미끼(넓게 산포).
-    function genNodes(a,b){ var r=rng(hash([a,b].sort().join("|"))), out=[], spine=[0.2,0.4,0.6,0.8];
-      for(var i=0;i<4;i++) out.push({x:AX+DX*(spine[i]+(r()-0.5)*0.06), y:clampY(CY+(r()-0.5)*100), t:0});
-      for(var j=0;j<NSTA-4;j++) out.push({x:AX+DX*(0.08+r()*0.84), y:clampY(CY+(r()-0.5)*2*215), t:0});
-      // 가벼운 셔플(척추/미끼 구분 안 보이게)
-      for(var k=out.length-1;k>0;k--){ var m=Math.floor(r()*(k+1)), tmp=out[k]; out[k]=out[m]; out[m]=tmp; }
+    // ====== 실제 지형 회랑(G1) — 전용 스테이지에 본 지도 슬라이스를 변환해 그린다 ======
+    // 맵 좌표(1280×780) → 스테이지 좌표(1000×540): 구간 A→B 회랑 bbox를 스테이지에 맞춰 확대(실제 방향·위치).
+    function toStage(p){ return {x: TF.ox+(p.x-TF.minx)*TF.s, y: TF.oy+(p.y-TF.miny)*TF.s}; }
+    function plLen(pts){ var seg=[0],L=0; for(var i=0;i<pts.length-1;i++){ L+=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y); seg.push(L);} return {L:L||1,seg:seg}; }
+    function plAt(pts,si,frac){ var t=frac*si.L,i;   // 폴리라인을 길이 비율로 샘플 + 법선(n) 반환
+      for(i=0;i<pts.length-1;i++){ if(si.seg[i+1]>=t){ var d=si.seg[i+1]-si.seg[i]||1,u=(t-si.seg[i])/d,
+        tx=pts[i+1].x-pts[i].x, ty=pts[i+1].y-pts[i].y, nl=Math.hypot(tx,ty)||1;
+        return {x:pts[i].x+tx*u, y:pts[i].y+ty*u, nx:-ty/nl, ny:tx/nl}; } }
+      var L=pts[pts.length-1]; return {x:L.x,y:L.y,nx:0,ny:1}; }
+    // 역참 후보 사이트(실제 회랑 위·주변, 각자 종류 고정). 최소-비용 가변 경로의 그래프 노드.
+    //  ① 테르겐 촘촘(저렴·근거리): 회랑 위 5 — 늘 실현가능한 다(多)역참 보급선 보장.
+    //  ② 모린 성김(비싸나 장거리): 회랑 위 2~3 — 적은 역참(예: 2개)으로 잇는 선택지(특히 엘치 적성).
+    //  ③ 나린 중간: 회랑서 약간 옆 2. ④ 미끼: 회랑서 멀리(혼합) — 우회 손해.
+    // 사이트를 적합 지형(via 높은 곳)으로 스냅: 봉우리·사막내부에서 강 계곡·오아시스·스텝으로 끌림(P2). 작은 국소 탐색.
+    function snapVia(x,y){ if(!VIA||!TF) return {x:clampX(x),y:clampY(y)};
+      var bx=x,by=y,bv=viaMap(toMap({x:x,y:y}).x, toMap({x:x,y:y}).y);
+      for(var a2=0;a2<8;a2++){ for(var rr=1;rr<=2;rr++){ var ang=a2/8*6.2832, sx=x+Math.cos(ang)*rr*13, sy=y+Math.sin(ang)*rr*13,
+        m=toMap({x:sx,y:sy}), v=viaMap(m.x,m.y); if(v>bv+0.02){ bv=v; bx=sx; by=sy; } } }
+      return {x:clampX(bx), y:clampY(by)}; }
+    function genSites(a,b,corS){ var r=rng(hash([a,b].sort().join("|"))), out=[], si=plLen(corS);
+      function on(f,jit,t){ var p=plAt(corS,si,f), s=snapVia(p.x+(r()-0.5)*8, p.y+(r()-0.5)*jit); return {x:s.x,y:s.y,t:t}; }
+      function off(f,frac,side,t){ var p=plAt(corS,si,f), o=si.L*frac*side, s=snapVia(p.x+p.nx*o, p.y+p.ny*o); return {x:s.x,y:s.y,t:t}; }
+      // ① 테르겐 레인(실현가능 백본): 회랑 따라 '국소 effReach'에 맞춰 그리디 배치(사막 구간 자동 밀집). 스냅 안 함(회랑=최소비용 viable).
+      var prev={x:A0.x,y:A0.y}, step=Math.max(5, si.L/420);
+      for(var t=step; t<si.L-2; t+=step){ var p=plAt(corS,si,t/si.L), m=toMap(p),
+          lr=(RB*0.72)/(1+REACHDES*desMap(m.x,m.y));                   // 국소 테르겐 실효 사거리
+        if(dist(prev,p)>=lr*0.80){ var nd={x:clampX(p.x+(r()-0.5)*4),y:clampY(p.y+(r()-0.5)*6),t:1}; out.push(nd); prev=nd; } }  // 간격 0.80(덜 촘촘)·지터 작게
+      var pe={x:clampX(plAt(corS,si,0.94).x),y:clampY(plAt(corS,si,0.94).y+(r()-0.5)*10)};
+      if(dist(prev,pe)>=14) out.push({x:pe.x,y:pe.y,t:1});             // 끝 보강은 가까우면 생략(겹침 방지)
+      // ② 모린 성김·③ 나린·④ 미끼 — 거리에 비례, via로 스냅. 최소 간격(MINSEP) 미만이면 버려 겹침 방지(백본은 항상 유지).
+      var MINSEP=14;
+      function pushFar(s){ for(var i=0;i<out.length;i++){ if(dist(out[i],s)<MINSEP) return; } out.push(s); }
+      var span=Math.max(1.4, si.L/RB), nM=Math.max(2,Math.round(span/1.55)+1), nN=Math.max(2,Math.round(span*0.45)), nD=Math.max(4,Math.round(span*0.7));
+      for(var i2=0;i2<nM;i2++) pushFar(on((i2+0.5)/nM + (r()-0.5)*0.04, 18, 0));            // 모린 성김
+      for(var i3=0;i3<nN;i3++) pushFar(off((i3+0.7)/(nN+0.4), 0.06+r()*0.03, (r()<0.5?1:-1), 2));  // 나린(회랑 옆)
+      var dT=[1,2,0,1,2,0];
+      for(var k=0;k<nD;k++){ var f=0.1+r()*0.8; pushFar(off(f, 0.16+r()*0.12, (r()<0.5?1:-1), dT[k%dT.length])); }  // 미끼
       return out; }
-    // DP 최적: A→(정확히 4 distinct)→B 최단, 각 구간 ≤R(cap). 불가능하면 null.
-    function solveOpt(cap){ var n=nodes.length;
-      function edge(p,q){ var v=dist(p,q); return (cap && v>RANGE)?Infinity:v; }
-      var dp=[], par=[]; for(var k=0;k<=KPICK;k++){ dp.push(new Array(n).fill(Infinity)); par.push(new Array(n).fill(-1)); }
-      for(var v=0;v<n;v++) dp[1][v]=edge(A0,nodes[v]);
-      for(var kk=2;kk<=KPICK;kk++) for(var w=0;w<n;w++){ var best=Infinity,bu=-1;
-        for(var u=0;u<n;u++){ if(u===w||dp[kk-1][u]===Infinity) continue; var c=dp[kk-1][u]+edge(nodes[u],nodes[w]); if(c<best){best=c;bu=u;} }
-        dp[kk][w]=best; par[kk][w]=bu; }
-      var tot=Infinity, bv=-1; for(var v2=0;v2<n;v2++){ var c2=dp[KPICK][v2]+edge(nodes[v2],B0); if(c2<tot){tot=c2;bv=v2;} }
-      if(tot===Infinity) return null;
-      var path=[], k2=KPICK, v3=bv; while(k2>=1 && v3>=0){ path.unshift(v3); v3=par[k2][v3]; k2--; }
-      return {len:tot, idx:path}; }
-    function chainSeq(idxArr){ var s=[A0]; idxArr.forEach(function(ix){ s.push(nodes[ix]); }); if(idxArr.length===KPICK) s.push(B0); return s; }
-    function seqLen(seq){ var L=0; for(var i=0;i<seq.length-1;i++) L+=dist(seq[i],seq[i+1]); return L; }
-    function draw(optIdx){ svgEl.innerHTML="";
-      // 보급 사거리 안내 링(현재 체인 머리)
-      if(active){ var head=pick.length? nodes[pick[pick.length-1]] : A0;
-        svgEl.appendChild(el("circle",{cx:head.x,cy:head.y,r:RANGE,fill:"none",stroke:"var(--gold)","stroke-width":"1","stroke-dasharray":"3 6",opacity:"0.33"})); }
-      // 최적 경로(채점 후 잔상)
+    // 지형 난이도 음영 — 본 지도(탐험 모드)와 '동일 방식': 작은 난이도 격자(GEO.heat)를 캔버스로 만들어 <image>로 확대
+    // (브라우저 bilinear 스무딩) → 마스킹 없는 연속 그라데이션이라 매끄럽고 익숙. 양피지·강·역참로·사이트가 그 아래로 또렷.
+    function heatImage(){ var h=GEO.heat; if(!h||!h.b64) return null;
+      var bin=atob(h.b64), cv=document.createElement("canvas"); cv.width=h.w; cv.height=h.h;
+      var ctx=cv.getContext("2d"), im=ctx.createImageData(h.w,h.h);
+      for(var p=0;p<h.w*h.h;p++){ var v=bin.charCodeAt(p)/255;
+        im.data[p*4]=120; im.data[p*4+1]=80; im.data[p*4+2]=45; im.data[p*4+3]=Math.pow(v,1.4)*120; }
+      ctx.putImageData(im,0,0);
+      var img=el("image",{x:h.x0,y:h.y0,width:h.x1-h.x0,height:h.y1-h.y0,preserveAspectRatio:"none",opacity:"0.78"});
+      img.setAttribute("href",cv.toDataURL()); return img; }
+    // 사막 기호: 점묘(흩뿌린 모래알) + 가끔 짧은 모래언덕 곡선.
+    function duneGlyph(x,y,rg){ var g=el("g",{}), c="#a98a55";
+      for(var i=0;i<5;i++) g.appendChild(el("circle",{cx:(x+(rg()-0.5)*15).toFixed(1),cy:(y+(rg()-0.5)*10).toFixed(1),r:(rg()*0.5+0.7).toFixed(2),fill:c,opacity:"0.85"}));
+      if(rg()<0.5) g.appendChild(el("path",{d:"M"+(x-6)+","+(y+4)+" q6,-4 12,0",fill:"none",stroke:c,"stroke-width":"0.8",opacity:"0.7"}));
+      return g; }
+    // 본 지도 슬라이스(정적 레이어): 바다 베이스 + 변환된 해안선·(난이도 heat)·호수·강·역참로. 스트로크는 비-스케일.
+    function geoSlice(){ var root=el("g",{});
+      root.appendChild(el("rect",{x:"0",y:"0",width:String(W),height:String(H),fill:"var(--sea)","fill-opacity":"0.5"}));
+      var g=el("g",{transform:"translate("+TF.ox+","+TF.oy+") scale("+TF.s+") translate("+(-TF.minx)+","+(-TF.miny)+")"});
+      (GEO.land||[]).forEach(function(d){ g.appendChild(el("path",{d:d,fill:"var(--parchment)",stroke:"var(--ink-soft)","stroke-width":"0.9","vector-effect":"non-scaling-stroke","stroke-linejoin":"round","stroke-linecap":"round"})); });
+      var hImg=heatImage(); if(hImg) g.appendChild(hImg);   // 지형 난이도 = 부드러운 heat 한 장(육지 위)
+      (GEO.lakes||[]).forEach(function(d){ g.appendChild(el("path",{d:d,fill:"var(--sea)","fill-opacity":"0.85",stroke:"none"})); });
+      (GEO.rivers||[]).forEach(function(d){ g.appendChild(el("path",{d:d,fill:"none",stroke:"#6f8c88","stroke-width":"0.9","vector-effect":"non-scaling-stroke",opacity:"0.6"})); });
+      (GEO.yampaths||[]).forEach(function(d){ g.appendChild(el("path",{d:d,fill:"none",stroke:"var(--gold)","stroke-width":"1.1","stroke-dasharray":"4 4","vector-effect":"non-scaling-stroke",opacity:"0.5"})); });
+      root.appendChild(g);
+      // 사막 = 옛 지도식 점묘(매끄러운 heat 위, 사막 셀에만). 스테이지 좌표=일정 크기, 시드 PRNG로 leg마다 고정.
+      if(KIND){ var rg=rng(hash(curA+"|"+curB+"|ico")), STc=34;
+        for(var iy=58; iy<H-50; iy+=STc){ for(var ix=26; ix<W-26; ix+=STc){
+          var jx=ix+(rg()-0.5)*26, jy=iy+(rg()-0.5)*22, m=toMap({x:jx,y:jy});
+          if(kindMap(m.x,m.y)===2 && rg()<0.72) root.appendChild(duneGlyph(jx,jy,rg)); } } }
+      return root; }
+    // 구간 회랑 준비: 변환·A0/B0·RB·후보 사이트·정적 지도 레이어 구성.
+    function buildCorridor(a,b){
+      var pa=byName[a], pb=byName[b], corM;
+      if(pa&&pb){ var P=(PATHS&&PATHS[[a,b].sort().join("|")]);
+        if(P&&P.length>1){ corM=P.map(function(q){return {x:q[0],y:q[1]};});
+          if(dist(corM[0],pa)>dist(corM[corM.length-1],pa)) corM.reverse(); }   // 정렬키라 방향이 뒤집힐 수 있음 → a에 가깝게
+        else corM=[{x:pa.x,y:pa.y},{x:pb.x,y:pb.y}]; }
+      else { corM=[{x:0,y:CY},{x:DX,y:CY}]; }                                    // 폴백(좌표 없음): 추상 직선
+      var xs=corM.map(function(p){return p.x;}), ys=corM.map(function(p){return p.y;});
+      var minx=Math.min.apply(null,xs),maxx=Math.max.apply(null,xs),miny=Math.min.apply(null,ys),maxy=Math.max.apply(null,ys);
+      // 패딩은 회랑의 '큰 변' 기준(양축 동일) → 짧은/가는 회랑도 A0~B0가 스테이지를 충분히 채움(고정값 지배 방지).
+      var span=Math.max(maxx-minx, maxy-miny, 1), pad=span*0.14+8; minx-=pad;maxx+=pad;miny-=pad;maxy+=pad;
+      var bw=Math.max(1,maxx-minx), bh=Math.max(1,maxy-miny);
+      var availW=W-80, availH=H-92, s=Math.min(availW/bw, availH/bh);            // 상단 46·하단 46 여백(범례)
+      TF={s:s, ox:40+(availW-bw*s)/2, oy:46+(availH-bh*s)/2, minx:minx, miny:miny};
+      var corS=corM.map(toStage); A0=corS[0]; B0=corS[corS.length-1];
+      // 사거리 = '실제 km'(REACHKM) 기준 → 역참 수 ≈ 실제거리/REACHKM. 소프트 캡은 '테르겐-사막' 최악 개수 기준(사막=사거리↓라 더 많아짐).
+      var si=plLen(corS), pk=pxkm();
+      if(ORBIS&&ORBIS.pxkm){ var corrKm=si.L/TF.s*pk, REACHKM=700, capN=11;
+        var corrDes=0; for(var q=0;q<=10;q++){ var mm=toMap(plAt(corS,si,q/10)); corrDes+=desMap(mm.x,mm.y); } corrDes/=11;
+        var estN=corrKm/(REACHKM*0.72)*(1+REACHDES*corrDes)*1.12;       // 테르겐(사거리×0.72)·사막 축소·안전계수 → 최악 개수 추정
+        var effKm=REACHKM*Math.max(1, estN/capN);                       // 추정이 capN 넘으면 사거리 넓혀 ~capN로 묶음
+        RB=Math.min(Math.max(40, effKm*TF.s/pk), si.L*0.42);           // floor: 짧은 구간도 ≥~2역참(0=비-게임 방지)
+        TOLLKM=(RB/TF.s*pk)*4.0; }                                      // 통행료=실제 hop 길이(RB_km)에 비례 → 종류 트레이드오프 거리무관
+      else { RB=Math.max(48, si.L*0.34); TOLLKM=Math.max(40, si.L*0.20); }  // 지형 OFF(실제 km 없음): 정규화 폴백
+      nodes=genSites(a,b,corS);
+      svgEl.innerHTML=""; svgEl.appendChild(geoSlice()); svgEl.appendChild(el("g",{id:"rsDyn"}));   // 정적 지도 + 동적 레이어
+    }
+    // 최소 비용 가변 경로(Dijkstra): A0 → (역참 임의 개수·순서) → B0. 개수 고정 없음.
+    //  간선 u→v: dist(u,v) ≤ reachOf(u)(보급 도달)일 때만. 비용 = 이동비용 hopCost(u,v) + 도착 노드 통행료 tollOf(v).
+    //  → '적은 비싼 모린' vs '많은 싼 테르겐'의 트레이드오프가 최적 개수를 결정. 종류·적성이 경로 구조를 가른다.
+    function solveOpt(){ var n=nodes.length, V=n+2, SRC=n, DST=n+1;   // SRC=A0, DST=B0
+      function node(i){ return i===SRC?A0 : i===DST?B0 : nodes[i]; }
+      var V2=V, d=new Array(V2).fill(Infinity), par=new Array(V2).fill(-1), done=new Array(V2).fill(false);
+      d[SRC]=0;
+      function relax(u){ var pu=node(u);
+        for(var v=0;v<V2;v++){ if(v===u||v===SRC) continue; var pv=node(v), dd=dist(pu,pv);
+          if(dd>effReach(pu,pv)) continue; var nc=d[u]+hopCost(pu,pv)+tollOf(pv); if(nc<d[v]){ d[v]=nc; par[v]=u; } } }
+      for(var it=0;it<V2;it++){ var best=Infinity,bu=-1;
+        for(var i=0;i<V2;i++){ if(!done[i]&&d[i]<best){best=d[i];bu=i;} }
+        if(bu<0) break; done[bu]=true; if(bu===DST) break; relax(bu); }
+      if(d[DST]===Infinity) return null;
+      var idx=[], cur=par[DST]; while(cur>=0 && cur!==SRC){ idx.unshift(cur); cur=par[cur]; }   // 중간 역참들(B0 제외)
+      return {cost:d[DST], idx:idx}; }
+    // (디버그/튜닝) 현재 nodes·주체 기준 최적 보급선 요약: {cost, relays, types}. 측정용.
+    window.__relayOpt=function(){ var o=solveOpt(); if(!o) return null;
+      return {cost:Math.round(o.cost), relays:o.idx.length, types:o.idx.map(function(ix){return nodes[ix].t;})}; };
+    // 체인(인덱스 배열) → 좌표열 [A0, …역참…, B0]. cost=이동비용 합 + 역참 통행료 합. feasible=각 hop ≤ reachOf(출발).
+    function chainSeq(idxArr){ var s=[A0]; idxArr.forEach(function(ix){ s.push(nodes[ix]); }); s.push(B0); return s; }
+    function chainCost(idxArr){ var seq=[A0]; idxArr.forEach(function(ix){ seq.push(nodes[ix]); }); seq.push(B0);
+      var c=0, km=0, feasible=true;
+      for(var i=0;i<seq.length-1;i++){ if(dist(seq[i],seq[i+1])>effReach(seq[i],seq[i+1])+0.5) feasible=false;
+        c+=hopCost(seq[i],seq[i+1]); km+=kmOf(seq[i],seq[i+1]); }
+      idxArr.forEach(function(ix){ c+=tollOf(nodes[ix]); });
+      return {cost:c, km:km, feasible:feasible}; }
+    function head(){ return pick.length? nodes[pick[pick.length-1]] : A0; }
+    function reaches(u,v){ return dist(u,v) <= effReach(u,v)+0.5; }   // 지형(사막) 반영 실효 사거리
+    function bReached(){ return reaches(head(), B0); }   // 머리에서 도착(B0)까지 보급이 닿으면 보급선 완성 가능
+    function partialCost(){ var seq=[A0]; pick.forEach(function(ix){seq.push(nodes[ix]);}); var c=0;
+      for(var i=0;i<seq.length-1;i++) c+=hopCost(seq[i],seq[i+1]); pick.forEach(function(ix){c+=tollOf(nodes[ix]);}); return c; }
+    function draw(optIdx){
+      var dyn=document.getElementById("rsDyn"); if(!dyn){ dyn=el("g",{id:"rsDyn"}); svgEl.appendChild(dyn); } dyn.innerHTML="";
+      var pf=prefType(), hd=head();
+      // 종류 범례(상단) — 이름 + 트레이드오프(사거리·비용). 지도 위 가독성 위해 옅은 배경 띠.
+      dyn.appendChild(el("rect",{x:"0",y:"0",width:String(W),height:"44",fill:"#efe6ce","fill-opacity":"0.85"}));
+      var lx=54; TYPES.forEach(function(ty,ti){ var on=ti===pf;
+        dyn.appendChild(el("circle",{cx:lx,cy:20,r:"5.5",fill:ty.fill,stroke:on?"var(--route)":"#7a531a","stroke-width":on?"2":"1"}));
+        var lt=el("text",{x:lx+11,y:18,style:"font-size:12px;font-weight:"+(on?"700":"600")+";fill:"+(on?"var(--route)":"var(--ink)")+";"+LB});
+        lt.textContent=ty.name+(on?" ◆":""); dyn.appendChild(lt);
+        var lp=el("text",{x:lx+11,y:32,style:"font-size:9.5px;fill:var(--ink-soft);"+LB}); lp.textContent=ty.tip; dyn.appendChild(lp);
+        lx+=158; });
+      dyn.appendChild(el("text",{x:W-16,y:18,"text-anchor":"end",style:"font-size:10px;fill:var(--ink-soft);"+LB})).textContent="◆ 주체 적성";
+      dyn.appendChild(el("text",{x:W-16,y:31,"text-anchor":"end",style:"font-size:10px;fill:var(--ink-soft);"+LB})).textContent="더 멀리·더 싸게";
+      // 보급 도달 범위(현재 머리) + 머리에서 닿는 후보 강조
+      if(active) dyn.appendChild(el("circle",{cx:hd.x,cy:hd.y,r:reachOf(hd),fill:"none",stroke:"var(--gold)","stroke-width":"1.4","stroke-dasharray":"3 6",opacity:"0.42"}));
+      // 최적 보급선(채점 후 잔상)
       if(optIdx){ var oseq=chainSeq(optIdx);
-        svgEl.appendChild(el("polyline",{points:oseq.map(function(p){return p.x+","+p.y;}).join(" "),fill:"none",stroke:"var(--route)","stroke-width":"2","stroke-dasharray":"6 5",opacity:"0.65"})); }
-      // 플레이어 체인 — 구간별 보급 색(녹=사거리내, 적=초과)
-      var seq=chainSeq(pick);
-      for(var i=0;i<seq.length-1;i++){ var ok=dist(seq[i],seq[i+1])<=RANGE;
-        svgEl.appendChild(el("line",{x1:seq[i].x,y1:seq[i].y,x2:seq[i+1].x,y2:seq[i+1].y,stroke:ok?"#2f7a4f":"#b3402b","stroke-width":"3","stroke-linecap":"round",opacity:"0.92"})); }
-      // 후보 노드
-      nodes.forEach(function(nd,idx){ var oi=pick.indexOf(idx), done=oi>=0, ty=TYPES[nd.t]||TYPES[0], g=el("g",{class:"st"});
+        dyn.appendChild(el("polyline",{points:oseq.map(function(p){return p.x+","+p.y;}).join(" "),fill:"none",stroke:"var(--route)","stroke-width":"2","stroke-dasharray":"6 5",opacity:"0.6"})); }
+      // 플레이어 보급선(순서대로) — 닿으면 녹, 초과면 적
+      var seq=chainSeq(pick), drawTo=active?(bReached()?seq.length-1:seq.length-2):seq.length-1;
+      for(var i=0;i<drawTo;i++){ var ok=reaches(seq[i],seq[i+1]);
+        dyn.appendChild(el("line",{x1:seq[i].x,y1:seq[i].y,x2:seq[i+1].x,y2:seq[i+1].y,stroke:ok?"#2f7a4f":"#b3402b","stroke-width":"3","stroke-linecap":"round",opacity:"0.95"})); }
+      // 후보 사이트 — 종류 색, 적성 외곽 링, 머리에서 닿으면 또렷·아니면 흐림, 체인에 든 것은 순번
+      nodes.forEach(function(nd,idx){ var oi=pick.indexOf(idx), inChain=oi>=0, ty=TYPES[nd.t]||TYPES[0],
+        canReach=active&&!inChain&&reaches(hd,nd), g=el("g",{class:"st"});
         g.appendChild(el("circle",{cx:nd.x,cy:nd.y,r:"15",fill:"transparent"}));
-        g.appendChild(el("circle",{cx:nd.x,cy:nd.y,r:done?"8":String(ty.r),fill:done?"var(--player)":ty.fill,stroke:done?"var(--player)":"#7a531a","stroke-width":"1.2"}));
-        if(done){ var t=el("text",{x:nd.x,y:nd.y+3.4,"text-anchor":"middle",style:"font-size:10px;font-weight:700;fill:#f3ece0"}); t.textContent=(oi+1); g.appendChild(t); }
-        g.addEventListener("click",function(){ if(active) toggle(idx); });
-        svgEl.appendChild(g); });
-      // A / B 인장
+        if(active && !inChain && !canReach) g.setAttribute("opacity","0.4");   // 닿지 않는 후보는 흐리게
+        if(!inChain && nd.t===pf) g.appendChild(el("circle",{cx:nd.x,cy:nd.y,r:String(ty.r+3.5),fill:"none",stroke:"var(--route)","stroke-width":"1.6",opacity:"0.75"}));
+        if(canReach) g.appendChild(el("circle",{cx:nd.x,cy:nd.y,r:String(ty.r+2),fill:"none",stroke:"var(--gold)","stroke-width":"1.4",opacity:"0.9"}));
+        g.appendChild(el("circle",{cx:nd.x,cy:nd.y,r:inChain?"8":String(ty.r),fill:inChain?"var(--player)":ty.fill,stroke:"#fff","stroke-width":"1.4"}));
+        if(inChain){ var t=el("text",{x:nd.x,y:nd.y+3.4,"text-anchor":"middle",style:"font-size:10px;font-weight:700;fill:#f3ece0"}); t.textContent=(oi+1); g.appendChild(t); }
+        g.addEventListener("click",function(){ if(active) chainClick(idx); });
+        dyn.appendChild(g); });
       function seal(p,color,name,sub){ var g=el("g",{});
         g.appendChild(el("circle",{cx:p.x,cy:p.y,r:"15",fill:color,opacity:"0.96"}));
         g.appendChild(el("circle",{cx:p.x,cy:p.y,r:"15",fill:"none",stroke:"#fff","stroke-width":"1.4",opacity:"0.6"}));
-        var t=el("text",{x:p.x,y:p.y-23,"text-anchor":"middle",style:"font-size:13px;font-weight:700;fill:"+color+";"+LB}); t.textContent=name; g.appendChild(t);
+        var t=el("text",{x:p.x,y:p.y-23,"text-anchor":"middle",style:"font-size:13px;font-weight:700;paint-order:stroke;stroke:#efe6ce;stroke-width:3px;fill:"+color+";"+LB}); t.textContent=name; g.appendChild(t);
         var s=el("text",{x:p.x,y:p.y+4,"text-anchor":"middle",style:"font-size:9px;font-weight:700;fill:#fff"}); s.textContent=sub; g.appendChild(s);
-        svgEl.appendChild(g); }
+        dyn.appendChild(g); }
       seal(A0,"#2f7a4f",curA,"출발"); seal(B0,"var(--route)",curB,"도착");
     }
-    function toggle(idx){ var at=pick.indexOf(idx);
-      if(at>=0) pick.splice(at,1); else if(pick.length<KPICK) pick.push(idx);
+    // 체인 클릭: 머리에서 닿는 새 사이트=추가, 체인 안 사이트=거기까지로 되돌림(재경로). 머리에서 못 닿으면 무시.
+    function chainClick(idx){ var at=pick.indexOf(idx);
+      if(at>=0){ pick=pick.slice(0, at); }                                  // 이미 든 노드 클릭 → 그 앞까지 잘라 되돌림
+      else if(reaches(head(), nodes[idx])) pick.push(idx);                  // 닿으면 추가
       draw(null); foot(); }
-    function foot(){ var n=pick.length;
-      rsHint.textContent="보급 사거리(점선 원) 안에서 가장 짧게 — 역참 "+n+" / "+KPICK+" 선택";
-      rsFoot.innerHTML="<button class='primary' id='rsDone'"+(n<KPICK?" disabled":"")+">역참로 완성</button><button id='rsReset'>다시</button>";
-      document.getElementById("rsDone").onclick=function(){ if(pick.length===KPICK) grade(); };
+    function foot(){ var pf=prefType(), can=bReached();
+      rsHint.textContent="역참을 이어 보급선을 잇고 — 비용(=거리×지형+통행료)을 가장 낮게, 개수는 자유   ·   주체 "+persona()+(pf>=0?" 적성: "+TYPES[pf].name:"");
+      var info="역참 "+pick.length+"개"+(can?"  ·  도착까지 보급 연결됨 ✓":"  ·  도착(B)까지 더 이으시오");
+      rsFoot.innerHTML="<div class='rsRes' style='margin-right:8px'>"+info+"</div>"+
+        "<button class='primary' id='rsDone'"+(can?"":" disabled")+">보급선 완성</button><button id='rsReset'>다시</button>";
+      document.getElementById("rsDone").onclick=function(){ if(bReached()) grade(); };
       document.getElementById("rsReset").onclick=function(){ pick=[]; draw(null); foot(); };
     }
     function grade(){ active=false;
-      var seq=chainSeq(pick), Lp=seqLen(seq), feasible=true;
-      for(var i=0;i<seq.length-1;i++){ if(dist(seq[i],seq[i+1])>RANGE){ feasible=false; break; } }
-      var opt=solveOpt(true) || solveOpt(false);
+      var pc=chainCost(pick), feasible=pc.feasible, opt=solveOpt();
       draw(opt?opt.idx:null);
-      var gap=opt?(Lp-opt.len)/(opt.len||1)*100:0, s=feasible?starsFor(gap,[4,12,25]):0;
+      var gap=opt?(pc.cost-opt.cost)/(opt.cost||1)*100:0, s=feasible?starsFor(gap,[12,26,48]):0;
       starsArr[li]=s;
       var glyph=""; for(var k=0;k<3;k++) glyph+=(k<s?"<span>★</span>":"<span class='off'>★</span>");
       var last=li===legs.length-1;
-      var msg=feasible ? ("최적 대비 "+(gap<1?"<b>최적!</b>":"+"+gap.toFixed(0)+"%")) : "<span class='warn'>보급 끊김 — 사거리 초과 구간</span>";
+      var msg=feasible ? ("역참 "+pick.length+"개 · "+Math.round(pc.km)+"km · 최적 대비 "+(gap<1.5?"<b>최적!</b>":"+"+gap.toFixed(0)+"%"))
+                       : "<span class='warn'>보급 끊김 — 사거리 초과 구간</span>";
       rsFoot.innerHTML="<div class='rsRes'><div class='stars'>"+glyph+"</div><div>"+msg+"</div></div>"+
         "<button id='rsRetry'>다시</button><button class='primary' id='rsNext'>"+(last?"순행 완주 →":"다음 역참로 →")+"</button>";
       document.getElementById("rsRetry").onclick=function(){ pick=[]; active=true; draw(null); foot(); };
@@ -764,10 +955,32 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
       csGo.onclick=function(){ sceneEl.classList.remove("show"); cont(); };
     }
     window.__playScene=playScene;   // 스토리 오프닝 시네마틱(로드 시)에서 재사용
-    function loadLeg(){ active=true; curA=legs[li][0]; curB=legs[li][1]; nodes=genNodes(curA,curB); pick=[];
+    function loadLeg(){ active=true; curA=legs[li][0]; curB=legs[li][1]; buildCorridor(curA,curB); pick=[];
       rsTtl.textContent=curA+"  →  "+curB+"   ("+(li+1)+" / "+legs.length+")";
       draw(null); foot();
+      if(li===0) relayTutorial(false);   // 첫 구간(대도→상도)에서 1회 길잡이
     }
+    // 역참로 튜토리얼 — 비차단 하단 길잡이 카드(4단계). force=true면 ? 버튼서 재호출(localStorage 무시).
+    var TUT=[
+      "<b>역참로 잇기</b> — 출발 <b>"+("")+"</b>에서 도착까지 보급선을 역참으로 잇습니다. 방금 짠 거시 순행로의 한 구간을 직접 채우는 단계예요.",
+      "<b>보급 범위</b> — 출발점의 <b>점선 원</b>이 보급이 닿는 거리입니다. 그 안의 역참만 이을 수 있고, <b>닿는 후보는 금색 테두리</b>로 빛나요. 금색 역참을 <b>클릭</b>해 잇고, 잘못 골랐으면 그 역참을 <b>다시 클릭</b>해 되돌립니다.",
+      "<b>역참 종류</b> — 위 범례처럼 <b>모린</b>(멀리·비쌈)·<b>테르겐</b>(가깝·저렴)·<b>나린</b>(중간)이 있습니다. 주체 적성(◆) 종류는 더 멀리·더 싸게 가요. 사막·산은 보급이 짧게 닿고 비싸니, <b>강·오아시스를 따라</b> 잇는 게 유리합니다.",
+      "<b>목표</b> — 도착까지 이으면 <b>‘보급선 완성’</b>. 적은 역참·짧은 길로 <b>총비용이 최적에 가까울수록 별 ★★★</b>. 자, 직접 이어보세요!"
+    ];
+    function relayTutorial(force){
+      try{ if(!force && localStorage.getItem("mongolRelayTut")) return; }catch(e){}
+      var tut=document.getElementById("rsTut"); if(!tut) return;
+      var body=document.getElementById("rsTutBody"), dots=document.getElementById("rsTutDots"),
+          nextB=document.getElementById("rsTutNext"), skipB=document.getElementById("rsTutSkip"); var i=0;
+      function show(){ body.innerHTML=TUT[i].replace("출발 <b></b>","출발 <b>"+curA+"</b>");
+        var dd=""; for(var k=0;k<TUT.length;k++) dd+=(k===i?"●":"○"); dots.textContent=dd;
+        nextB.textContent=(i===TUT.length-1)?"시작하기":"다음 →"; skipB.style.display=(i===TUT.length-1)?"none":"";
+        tut.classList.add("show"); }
+      function done(){ tut.classList.remove("show"); try{ localStorage.setItem("mongolRelayTut","1"); }catch(e){} }
+      nextB.onclick=function(){ if(window.__sfx) window.__sfx("page"); i++; if(i>=TUT.length) done(); else show(); };
+      skipB.onclick=done; show();
+    }
+    (function(){ var hb=document.getElementById("rsHelp"); if(hb) hb.onclick=function(){ relayTutorial(true); }; })();
     function finish(){ active=false; window.__relayActive=false;
       var tot=0; starsArr.forEach(function(x){ tot+=(x||0); }); var mx=legs.length*3, best=tot;
       try{ var key="mongolRelay:"+(SCENARIO?(SCENARIO.id||SCENARIO.title):("free:"+SELECTED.slice().sort().join(",")));
@@ -821,12 +1034,26 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     var routeGold=null, caravan=null, built=false, routeOn=false, opLand=null, opCities=null, nodeG={}, OPENONLY={"제노바":1,"베네치아":1,"대도":1};
     function rngOpen(seed){ var s=(seed>>>0)||1; return function(){ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; }; }
     function setT(elm,op,dur){ if(!elm) return; elm.style.transition="opacity "+(dur||0.8)+"s ease"; elm.style.opacity=String(op); }
+    // 별자리 → 지도: 하나의 일괄 크로스페이드. 하늘·별은 사라지고 지도는 떠오르며, 별 노드의 글로우도 같은 시간에 부드럽게 꺼진다.
+    // night 클래스는 '끝'에서만 제거(즉시 제거 시 글로우·스타일이 따로 튀는 문제 해결). 모든 변화가 같은 dur로 동기화.
+    function starToMap(dur, done){ dur=dur||3.4;
+      // 글로우를 inline으로 고정 → night 제거해도 유지 → 같은 dur로 서서히 끔(팝 없음)
+      var circs=cam.querySelectorAll("circle");
+      [].forEach.call(circs, function(c){ c.style.filter="drop-shadow(0 0 2.5px #ffe7a6)"; });
+      void cam.offsetWidth;                                  // reflow 후 transition 적용
+      opening.classList.remove("night");
+      [].forEach.call(circs, function(c){ c.style.transition="filter "+dur+"s ease"; c.style.filter="none"; });
+      setT(opSky,0,dur); setT(starfield,0,dur); setT(opLand,1,dur);   // 하늘·별 ↓, 지도 ↑ — 동시
+      if(done) setTimeout(done, dur*1000+120);
+    }
     function build(){ if(built) return; built=true; cam.innerHTML="";
       // 배경 별무리(밤하늘 ambiance) — 한 번만 생성
       if(starfield && !starfield.childNodes.length){ var r=rngOpen(20260621);
         for(var s=0;s<64;s++) starfield.appendChild(mk("circle",{cx:(r()*1000).toFixed(1),cy:(r()*520).toFixed(1),r:(r()*1.2+0.3).toFixed(1),fill:"#fff",opacity:(r()*0.55+0.2).toFixed(2)})); }
       // 지도 레이어(클릭 시 페이드인): 바다 + 육지(해안선) + 호수
       opLand=mk("g",{}); opLand.setAttribute("id","opLand");
+      // 파치먼트 시트를 깔아 바다가 '어둠'이 아니라 '양피지' 위에서 블렌드 → 기존 바다 색감 유지(배경은 어둠·레터박스 시네마틱).
+      opLand.appendChild(mk("rect",{x:"-300",y:"-300",width:"1600",height:"1120",fill:"var(--parchment)"}));
       opLand.appendChild(mk("rect",{x:"-300",y:"-300",width:"1600",height:"1120",fill:"var(--sea)",opacity:"0.32"}));
       ((OPENMAP&&OPENMAP.land)||[]).forEach(function(d){ opLand.appendChild(mk("path",{d:d,fill:"var(--parchment)",stroke:"var(--ink-soft)","stroke-width":"0.6","stroke-linejoin":"round","stroke-linecap":"round"})); });
       ((OPENMAP&&OPENMAP.lakes)||[]).forEach(function(d){ opLand.appendChild(mk("path",{d:d,fill:"var(--sea)","fill-opacity":"0.75",stroke:"none"})); });
@@ -957,28 +1184,27 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     // 샌드박스 진입: 별→지도 전환 후 오버레이 닫아 본 게임(몽골 제국) 지도 표시.
     function startSandbox(){ try{ localStorage.setItem("mongolEntered","sandbox"); }catch(e){}
       __pageBg(false);   // 페이지 배경 밤하늘 해제
-      if(opCard){ opCard.style.transition="none"; opCard.style.opacity="0"; }   // 모드 선택 카드 즉시 사라짐
-      opening.classList.remove("night"); setT(opSky,0,3.8); setT(starfield,0,3.8); setT(opLand,1,3.8);   // 별→지도 천천히
-      setTimeout(function(){ opening.classList.remove("show"); }, 3900); }
+      if(opCard){ opCard.style.transition="opacity .5s"; opCard.style.opacity="0"; }   // 모드 선택 카드 사라짐
+      starToMap(3.4, function(){ opening.classList.remove("show"); });   // 별→지도 일괄 전환 후 오버레이 닫기
+    }
     // 스토리 진입: 메인 지도를 폴로로 교체 + 별→지도 → 1초 후 제노바 줌인 → 독백 beats → 대도서 줌아웃 리빌.
     function startStory(S){ if(window.__applyStory) window.__applyStory(S);
       var mapSvg=document.getElementById("map"), st=byName[(S&&S.start)||"대도"]||byName["대도"];
       mapSvg.classList.add("storyintro"); if(st && window.__focus) window.__focus(st.x-66,st.y-46,st.x+66,st.y+46,0);
       function reveal(){ if(window.__resetView) window.__resetView(1000); setTimeout(function(){ mapSvg.classList.remove("storyintro"); },100); }
-      // 별→지도 전환을 아주 천천히(3.8s) — 별이 도시로 바뀌는 메타포를 충분히 음미하도록.
+      // 별→지도 전환을 하나의 일괄 크로스페이드로(3.4s) — 별이 도시로 바뀌는 메타포. 끝나면 제노바로 시선 유도.
       __pageBg(false);   // 페이지 배경 밤하늘 해제(복귀)
-      if(opCard){ opCard.style.transition="none"; opCard.style.opacity="0"; }   // 모드 선택 카드 즉시 사라짐
-      opening.classList.remove("night"); setT(opSky,0,3.8); setT(starfield,0,3.8); setT(opLand,1,3.8);
+      if(opCard){ opCard.style.transition="opacity .5s"; opCard.style.opacity="0"; }   // 모드 선택 카드 사라짐
       var beats=(S&&S.scenario&&S.scenario.opening&&S.scenario.opening.beats)||[];
-      setTimeout(function(){   // 전환 후: 제노바가 '떠오르고' 카메라가 그쪽으로 유도 → 클릭
+      starToMap(3.4, function(){   // 전환 완료 후: 제노바가 '떠오르고' 카메라가 그쪽으로 유도 → 클릭
         if(opCard){ opCard.style.transition="opacity .6s"; opCard.style.opacity="1"; }   // 카드 복귀(독백 안내)
-        var gp=POS["제노바"]; if(gp) camTo(gp.x, gp.y, 2.2, 1400);   // 제노바로 부드럽게 시선 유도(제노바는 activateNode가 천천히 떠올림)
+        var gp=POS["제노바"]; if(gp) camTo(gp.x, gp.y, 2.2, 1400);   // 제노바로 부드럽게 시선 유도(activateNode가 천천히 떠올림)
         opTag.textContent=""; opTtl.textContent="";
         opBody.innerHTML="<div class='opLine' style='text-align:center;color:var(--ink-soft)'>제노바를 클릭해 이야기를 시작하세요</div>";
         opGo.style.display="none";
         if(typeof activateNode==="function") activateNode("제노바", function(){ runBeats(beats, reveal); });
         else runBeats(beats, reveal);
-      }, 4000);
+      });
     }
     // 인게임 타이틀(별자리): 스토리 / 샌드박스 선택.
     window.__runTitle=function(S){

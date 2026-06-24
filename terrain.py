@@ -99,6 +99,59 @@ def _to_cell(x, y):
             min(_GH - 1, max(0, int((y - _GY0) / (_GY1 - _GY0) * _GH))))
 def _is_water(i, j): return _SEABITS is not None and _SEABITS[i * _GH + j] == "1"
 def _is_road(i, j): return _YAMBITS is not None and _YAMBITS[i * _GH + j] == "1"
+
+def difficulty_grid(dw=92, dh=56):
+    """역참 미니게임용 — 맵 투영 bbox 위 지형 격자(거시 격자 다운샘플). JS가 맵 좌표로 샘플.
+    채널: b64=hardness(int/scale*255, hop 비용용)·k=종류(0평지·1산악·2사막, 아이콘)·
+          des=사막 강도(0..255, '사막=사거리 축소'용)·via=사이트 적합도(0..255 高=좋음; 봉우리·사막내부 회피 + 강·물 근접 보너스).
+    반환 {"w","h","x0","y0","x1","y1","scale","b64","k","des","via"}."""
+    import re
+    from collections import deque
+    # ── 물(강·호수·바다) 셀 표시 → BFS로 물-근접 거리(격자 셀 단위) ──
+    water = [[False] * dw for _ in range(dh)]
+    for paths in (_GEO.get("rivers"), _GEO.get("lakes")):
+        for d in (paths or []):
+            for sx, sy in re.findall(r'(-?\d+\.?\d*),(-?\d+\.?\d*)', d):
+                ci = int((float(sx) - _GX0) / (_GX1 - _GX0) * dw)
+                cj = int((float(sy) - _GY0) / (_GY1 - _GY0) * dh)
+                if 0 <= ci < dw and 0 <= cj < dh:
+                    water[cj][ci] = True
+    wdist = [[999] * dw for _ in range(dh)]; q = deque()
+    for j in range(dh):
+        y = _GY0 + (j + 0.5) / dh * (_GY1 - _GY0)
+        for i in range(dw):
+            x = _GX0 + (i + 0.5) / dw * (_GX1 - _GX0)
+            ci, cj = _to_cell(x, y)
+            if water[j][i] or _is_water(ci, cj):
+                water[j][i] = True; wdist[j][i] = 0; q.append((i, j))
+    while q:
+        ci, cj = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ni, nj = ci + dx, cj + dy
+            if 0 <= ni < dw and 0 <= nj < dh and wdist[nj][ni] > wdist[cj][ci] + 1:
+                wdist[nj][ni] = wdist[cj][ci] + 1; q.append((ni, nj))
+    buf = bytearray(dw * dh); knd = bytearray(dw * dh); des = bytearray(dw * dh); via = bytearray(dw * dh)
+    for j in range(dh):
+        y = _GY0 + (j + 0.5) / dh * (_GY1 - _GY0)
+        for i in range(dw):
+            x = _GX0 + (i + 0.5) / dw * (_GX1 - _GX0)
+            ci, cj = _to_cell(x, y)
+            if _is_water(ci, cj):
+                hard = 9.0; k = 0; m = 0.0; d = 0.0; v = 0.0   # 바다: 사이트 불가
+            else:
+                m = _mtn(ci, cj); d = _des(ci, cj)
+                hard = 1.0 + m * 1.7 + d * 1.15
+                k = 1 if (m >= 0.28 and m >= d) else (2 if d >= 0.26 else 0)
+                base = max(0.0, 1.0 - (d * 1.05 + m * 1.35))            # 사막내부·봉우리 회피
+                wbon = max(0.0, 0.45 - wdist[j][i] * 0.12)              # 강·물 근접 보너스(약 4셀 내)
+                v = max(0.0, min(1.0, base + wbon))
+            buf[j * dw + i] = max(0, min(255, int(hard / 9.0 * 255)))
+            knd[j * dw + i] = k
+            des[j * dw + i] = max(0, min(255, int(d * 255)))
+            via[j * dw + i] = max(0, min(255, int(v * 255)))
+    enc = lambda b: base64.b64encode(bytes(b)).decode("ascii")
+    return {"w": dw, "h": dh, "x0": _GX0, "y0": _GY0, "x1": _GX1, "y1": _GY1, "scale": 9.0,
+            "b64": enc(buf), "k": enc(knd), "des": enc(des), "via": enc(via)}
 def _land_cell(i, j):
     if not _is_water(i, j): return (i, j)
     for r in range(1, 12):

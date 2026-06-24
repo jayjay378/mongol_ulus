@@ -129,6 +129,11 @@ def _qaoa(coords_t, reps, maxiter, terrain_on, mode, priority, season):
     return solve_qaoa(list(coords_t), reps=reps, maxiter=maxiter, C=C)
 
 @st.cache_data(show_spinner=False)
+def _relay_terr():
+    """역참 미니게임용 지형 난이도 격자(한 번만 계산·캐시)."""
+    return terrain.difficulty_grid()
+
+@st.cache_data(show_spinner=False)
 def _story_bundle(scen_json):
     """스토리(폴로) 모드 전체 설정을 미리 계산해 iframe에 통째로 주입(인게임 타이틀에서 전환).
     공정 채점=Brute(≤9)·아니면 고전. scen_json(고정 문자열)로 캐시 → 1회만 계산."""
@@ -241,7 +246,8 @@ html = build_map(CITIES, GHOSTS, sel, answer, start=start, show_ghosts=show_ghos
                  barriers=(terrain.BARRIERS if terrain_on else []), cr=cr, cart_center=cart_center,
                  geo=GEO_VIEW, info=CITY_INFO, pedia=PEDIA, paths=paths, force_mode=force_mode,
                  metrics=metrics3, orbis=orbis, scenario=scenario_meta, city_scenes=CITY_SCENES,
-                 opening_map=OPENING_MAP, story=STORY, sounds=SOUNDS)
+                 opening_map=OPENING_MAP, story=STORY, sounds=SOUNDS,
+                 relay_terr=_relay_terr())   # 맵 전역 지형 난이도(모드 무관) — 역참 미니게임이 hop 비용에 곱함
 components.html(html, height=760, scrolling=False)
 
 # 안내 문구는 몰입을 위해 기본 숨김(접이식 도움말). 필요할 때만 펼쳐 본다.
