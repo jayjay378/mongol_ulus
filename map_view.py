@@ -872,8 +872,12 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         lx+=158; });
       dyn.appendChild(el("text",{x:W-16,y:18,"text-anchor":"end",style:"font-size:10px;fill:var(--ink-soft);"+LB})).textContent="◆ 주체 적성";
       dyn.appendChild(el("text",{x:W-16,y:31,"text-anchor":"end",style:"font-size:10px;fill:var(--ink-soft);"+LB})).textContent="더 멀리·더 싸게";
-      // 보급 도달 범위(현재 머리) + 머리에서 닿는 후보 강조
-      if(active) dyn.appendChild(el("circle",{cx:hd.x,cy:hd.y,r:reachOf(hd),fill:"none",stroke:"var(--gold)","stroke-width":"1.4","stroke-dasharray":"3 6",opacity:"0.42"}));
+      // 보급 도달 범위(현재 머리) — effReach를 방향별로 샘플한 '정직한' 블롭(사막 방향은 짧게). 링 안=실제로 닿는 곳.
+      if(active){ var bn=30, bp=[];
+        for(var bi=0;bi<bn;bi++){ var ang=bi/bn*6.2832, cc=Math.cos(ang), ss=Math.sin(ang),
+            er=effReach(hd,{x:hd.x+cc*reachOf(hd)*0.66, y:hd.y+ss*reachOf(hd)*0.66});
+          bp.push((hd.x+cc*er).toFixed(1)+","+(hd.y+ss*er).toFixed(1)); }
+        dyn.appendChild(el("polygon",{points:bp.join(" "),fill:"var(--gold)","fill-opacity":"0.05",stroke:"var(--gold)","stroke-width":"1.4","stroke-dasharray":"3 6",opacity:"0.5"})); }
       // 최적 보급선(채점 후 잔상)
       if(optIdx){ var oseq=chainSeq(optIdx);
         dyn.appendChild(el("polyline",{points:oseq.map(function(p){return p.x+","+p.y;}).join(" "),fill:"none",stroke:"var(--route)","stroke-width":"2","stroke-dasharray":"6 5",opacity:"0.6"})); }
@@ -899,12 +903,21 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         var s=el("text",{x:p.x,y:p.y+4,"text-anchor":"middle",style:"font-size:9px;font-weight:700;fill:#fff"}); s.textContent=sub; g.appendChild(s);
         dyn.appendChild(g); }
       seal(A0,"#2f7a4f",curA,"출발"); seal(B0,"var(--route)",curB,"도착");
+      // 도착까지 보급이 닿으면 B에 펄스 — "이으면 완성" 명확히.
+      if(active && bReached()){ var pr=el("circle",{cx:B0.x,cy:B0.y,r:"19",fill:"none",stroke:"var(--gold)","stroke-width":"2.5",opacity:"0.9"});
+        pr.appendChild(el("animate",{attributeName:"r",values:"16;25;16",dur:"1.3s",repeatCount:"indefinite"}));
+        pr.appendChild(el("animate",{attributeName:"opacity",values:"0.95;0.3;0.95",dur:"1.3s",repeatCount:"indefinite"})); dyn.appendChild(pr); }
     }
-    // 체인 클릭: 머리에서 닿는 새 사이트=추가, 체인 안 사이트=거기까지로 되돌림(재경로). 머리에서 못 닿으면 무시.
+    // 체인 클릭: 머리에서 닿는 새 사이트=추가, 체인 안 사이트=거기까지로 되돌림(재경로). 못 닿으면 빨강 깜빡(왜 안 되는지 피드백).
     function chainClick(idx){ var at=pick.indexOf(idx);
       if(at>=0){ pick=pick.slice(0, at); }                                  // 이미 든 노드 클릭 → 그 앞까지 잘라 되돌림
       else if(reaches(head(), nodes[idx])) pick.push(idx);                  // 닿으면 추가
+      else { flashUnreach(idx); return; }                                  // 사거리 밖 → 깜빡(추가 안 됨)
       draw(null); foot(); }
+    function flashUnreach(idx){ var dyn=document.getElementById("rsDyn"); if(!dyn) return; var nd=nodes[idx];
+      var fl=el("circle",{cx:nd.x,cy:nd.y,r:"11",fill:"none",stroke:"#b3402b","stroke-width":"2.5",opacity:"0.95"}); dyn.appendChild(fl);
+      if(window.__sfx) window.__sfx("select");
+      setTimeout(function(){ if(fl.parentNode) fl.parentNode.removeChild(fl); }, 460); }
     function foot(){ var pf=prefType(), can=bReached();
       rsHint.textContent="역참을 이어 보급선을 잇고 — 비용(=거리×지형+통행료)을 가장 낮게, 개수는 자유   ·   주체 "+persona()+(pf>=0?" 적성: "+TYPES[pf].name:"");
       var info="역참 "+pick.length+"개"+(can?"  ·  도착까지 보급 연결됨 ✓":"  ·  도착(B)까지 더 이으시오");
