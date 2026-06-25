@@ -190,6 +190,23 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
   #opening .opGo{ padding:8px 26px; border:1px solid var(--gold); background:var(--gold); color:#fff;
     font-family:"Noto Serif KR",serif; font-size:14.5px; border-radius:4px; cursor:pointer; }
   #opening .opGo:hover{ filter:brightness(1.08); }
+  /* 오프닝 내러티브 = 전면 낭독 뷰: 지도를 어둡게 깔고 중앙에 큰 본문+장 제목(긴 산문 몰입). 클릭 힌트는 하단 opCard. */
+  #opRead{ position:absolute; inset:0; z-index:8; display:none; align-items:center; justify-content:center; padding:26px 20px;
+    background:radial-gradient(125% 100% at 50% 42%, rgba(16,11,5,.5), rgba(8,6,3,.8)); }
+  #opRead.show{ display:flex; animation:opReadIn .5s ease; }
+  @keyframes opReadIn{ from{ opacity:0 } to{ opacity:1 } }
+  #opRead .opReadInner{ width:min(690px,94%); max-height:90%; overflow:auto; text-align:center; }
+  #opRead .opReadArt{ width:100%; height:148px; border:1px solid rgba(214,184,112,.45); border-radius:6px;
+    background:#1a140c center/cover no-repeat; color:#9b8a66; display:flex; align-items:center; justify-content:center;
+    font-size:12px; letter-spacing:6px; }
+  #opRead .opReadArt.hasimg{ color:transparent; border-color:var(--gold); }
+  #opRead .opReadTag{ margin-top:15px; font-size:11px; letter-spacing:6px; color:#d9b870; font-weight:700; }
+  #opRead .opReadTtl{ font-size:27px; font-weight:700; color:#f1e6c8; margin-top:5px; letter-spacing:2px; text-shadow:0 1px 12px rgba(0,0,0,.55); }
+  #opRead .opReadBody{ font-size:15.5px; line-height:1.95; color:#ece0c6; margin:16px 4px 20px; text-align:left; white-space:pre-wrap; }
+  #opRead .opReadBody .opLine{ min-height:9px; }
+  #opRead .opReadGo{ padding:9px 30px; border:1px solid var(--gold); background:var(--gold); color:#fff;
+    font-family:"Noto Serif KR",serif; font-size:15px; border-radius:5px; cursor:pointer; }
+  #opRead .opReadGo:hover{ filter:brightness(1.08); }
   /* 첫 화면 '별자리'(밤하늘): 노드만 빛나고 지도·라벨 숨김. opacity 전환은 JS가 inline으로 구동. */
   #opening.night{ cursor:default; background:#070b1c; }
   #opening.night .opCard{ background:#070b1c; padding-bottom:20px; }
@@ -248,6 +265,13 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
       <div class="opBody" id="opBody"></div>
       <button class="opGo" id="opGo">계속 →</button>
     </div>
+    <div id="opRead"><div class="opReadInner">
+      <div class="opReadArt" id="opReadArt">삽 화 자 리</div>
+      <div class="opReadTag" id="opReadTag"></div>
+      <div class="opReadTtl" id="opReadTtl"></div>
+      <div class="opReadBody" id="opReadBody"></div>
+      <button class="opReadGo" id="opReadGo">계속 →</button>
+    </div></div>
   </div>
   <div class="panel zoom">
     <button id="zin" aria-label="확대">+</button><button id="zout" aria-label="축소">&minus;</button>
@@ -1034,6 +1058,19 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     var cam=document.getElementById("opCam"), opCard=opening.querySelector(".opCard"),
         opTag=document.getElementById("opTag"), opTtl=document.getElementById("opTtl"),
         opBody=document.getElementById("opBody"), opGo=document.getElementById("opGo");
+    // 전면 낭독 뷰(긴 산문) 요소
+    var opRead=document.getElementById("opRead"), opReadArt=document.getElementById("opReadArt"),
+        opReadTag=document.getElementById("opReadTag"), opReadTtl=document.getElementById("opReadTtl"),
+        opReadBody=document.getElementById("opReadBody"), opReadGo=document.getElementById("opReadGo");
+    function showRead(b){   // beat 내러티브를 전면 낭독 뷰에 표시(지도 어둡게). 삽화칸=b.img 있으면 표시, 없으면 자리.
+      opReadTag.textContent=b.tag||""; opReadTtl.textContent=b.title||"";
+      opReadBody.innerHTML=""; (b.lines||[]).forEach(function(ln){ var pp=document.createElement("div"); pp.className="opLine"; pp.textContent=ln||""; opReadBody.appendChild(pp); });
+      if(b.img){ opReadArt.style.backgroundImage="url('"+b.img+"')"; opReadArt.textContent=""; opReadArt.classList.add("hasimg"); }
+      else { opReadArt.style.backgroundImage=""; opReadArt.textContent="삽 화 자 리"; opReadArt.classList.remove("hasimg"); }
+      opReadGo.textContent=b.btn||"계속 →"; opReadInner_scrollTop();
+      if(opCard) opCard.style.opacity="0"; opRead.classList.add("show"); }
+    function hideRead(){ opRead.classList.remove("show"); if(opCard) opCard.style.opacity="1"; }
+    function opReadInner_scrollTop(){ var inn=opRead&&opRead.querySelector(".opReadInner"); if(inn) inn.scrollTop=0; }
     var CXC=500, CYC=255, mk=el;
     var POS=(OPENMAP&&OPENMAP.nodes)||{ "제노바":{x:142,y:300,big:1}, "베네치아":{x:210,y:266,big:1},
       "콘스탄티노플":{x:340,y:300}, "바그다드":{x:440,y:334}, "사마르칸트":{x:560,y:250},
@@ -1107,34 +1144,33 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
       requestAnimationFrame(st); }
     function zoomFor(n){ var p=POS[n]; if(!p) return [CXC,CYC,1.0]; return [p.x, p.y, p.big?3.2:2.6]; }
     function runBeats(beats, onDone){ var i=0;
-      function advance(){ i++; if(i<beats.length) beat(); else { opening.classList.remove("show"); if(onDone) onDone(); } }
+      function advance(){ i++; if(i<beats.length) beat(); else { hideRead(); opening.classList.remove("show"); if(onDone) onDone(); } }
       function beat(){ var b=beats[i]||{}; routeOn=false;   // 매 beat 전환 시 경로 애니 중단
         if(window.__sfx) window.__sfx("page");   // 책 넘기는 소리(서사 카드 전환)
-        opTag.textContent=b.tag||""; opTtl.textContent=b.title||""; opGo.style.display="";
-        opBody.innerHTML=""; (b.lines||[]).forEach(function(ln){ var pp=document.createElement("div"); pp.className="opLine"; pp.textContent=ln||""; opBody.appendChild(pp); });
-        opGo.textContent=b.btn||"계속 →";
+        showRead(b);   // 내러티브 = 전면 낭독 뷰(지도 어둡게, 중앙 큰 본문). 클릭 힌트만 하단 opCard.
         if(b.focus==="cities"){ camTo(500,235,1.0,1100); if(opCities) setT(opCities,1);
           if(routeGold) routeGold.setAttribute("stroke-dashoffset", routeGold.getTotalLength()); }   // 베네치아서 줌아웃 → 75개 도시 등장(경로는 대도 클릭 시)
         else if(b.focus==="route"){ camTo(CXC,235,1.0,900); if(routeGold){ routeGold.setAttribute("stroke-dashoffset", routeGold.getTotalLength()); routeOn=true; setTimeout(animateRoute,450); } }
         else { var z=zoomFor(b.focus); camTo(z[0],z[1],z[2],900); }
-        opGo.onclick=function(){
-          if(b.tutorial){ runTutorial(b.tutorial, b.tutorial_title||"첫 번째 여정", advance); return; }   // 노드 연결 튜토리얼(도시 하나씩 떠오르고 클릭)
-          if(b.next_node && nodeG[b.next_node]){   // 카드 닫고 다음 노드 활성화(페이드+펄스) → 클릭 유도
+        opReadGo.onclick=function(){
+          if(b.tutorial){ hideRead(); runTutorial(b.tutorial, b.tutorial_title||"첫 번째 여정", advance); return; }   // 노드 연결 튜토리얼
+          if(b.next_node && nodeG[b.next_node]){   // 낭독 닫고(지도 밝게) 다음 노드 활성화(페이드+펄스) → 하단 힌트로 클릭 유도
+            hideRead();
             opTag.textContent=""; opTtl.textContent="";
             opBody.innerHTML="<div class='opLine' style='text-align:center;color:var(--ink-soft)'>"+(b.next_hint||(b.next_node+"를 클릭하세요"))+"</div>";
-            opGo.style.display="none";
+            opGo.style.display="none"; if(opCard) opCard.style.opacity="1";
             if(b.focus && nodeG[b.focus]){   // 노드 포커스 beat: 떠나는 노드 페이드아웃 + 다음 노드로 카메라 센터링
-              if(b.focus!==b.next_node) setT(nodeG[b.focus], 0);   // 제노바 등 자연스럽게 사라짐
-              var zn=zoomFor(b.next_node); camTo(zn[0], zn[1], zn[2], 1100);   // 베네치아로 센터 이동(수많은 도시→대도는 비-노드 포커스라 넓은 뷰 유지)
+              if(b.focus!==b.next_node) setT(nodeG[b.focus], 0);
+              var zn=zoomFor(b.next_node); camTo(zn[0], zn[1], zn[2], 1100);
             }
             activateNode(b.next_node, function(){
               if(b.route_on_click && routeGold){   // 대도 클릭 후 노드를 잇는 경로 애니메이션 → 완료(또는 폴백)되면 진행
                 var adv=false; function go(){ if(adv) return; adv=true; if(routeGold) routeGold.setAttribute("stroke-dashoffset", 0); advance(); }
                 routeGold.setAttribute("stroke-dashoffset", routeGold.getTotalLength()); routeOn=true; animateRoute(go);
-                setTimeout(go, 2600);   // rAF 일시정지(탭 비활성) 대비 폴백 — 경로는 그려진 상태로 진행
+                setTimeout(go, 2600);
               } else advance();
             });
-          } else advance();
+          } else advance();   // 순수 내러티브 → 다음 beat가 낭독 뷰 갱신(닫지 않음, 깜빡임 방지)
         };
       }
       beat();
