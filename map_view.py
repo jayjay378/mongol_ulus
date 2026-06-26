@@ -1014,7 +1014,7 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
         nextB.textContent=(i===TUT.length-1)?"시작하기":"다음 →"; skipB.style.display=(i===TUT.length-1)?"none":"";
         tut.classList.add("show"); }
       function done(){ tut.classList.remove("show"); try{ localStorage.setItem("mongolRelayTut","1"); }catch(e){} }
-      nextB.onclick=function(){ if(window.__sfx) window.__sfx("page"); i++; if(i>=TUT.length) done(); else show(); };
+      nextB.onclick=function(){ i++; if(i>=TUT.length) done(); else show(); };   // page 효과음 제거(튜토리얼)
       skipB.onclick=done; show();
     }
     (function(){ var hb=document.getElementById("rsHelp"); if(hb) hb.onclick=function(){ relayTutorial(true); }; })();

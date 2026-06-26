@@ -65,7 +65,7 @@ def rotate_to(route, start):
         i = route.index(start); return route[i:] + route[:i]
     return route
 
-st.set_page_config(page_title="칸이 명한 순행로", layout="wide")
+st.set_page_config(page_title="칸이 명한 순행로", layout="wide", initial_sidebar_state="collapsed")
 
 # 리런(특히 수십 초 걸리는 양자 계산) 중에도 지도·백과사전을 흐려지지 않고 그대로 보고 만질 수 있게.
 # 지도 iframe을 담은 컨테이너만 페이드/잠금 해제 — 경고 등 다른 요소는 Streamlit 기본대로(중복 방지).
@@ -250,9 +250,20 @@ html = build_map(CITIES, GHOSTS, sel, answer, start=start, show_ghosts=show_ghos
                  relay_terr=_relay_terr())   # 맵 전역 지형 난이도(모드 무관) — 역참 미니게임이 hop 비용에 곱함
 components.html(html, height=760, scrolling=False)
 
-# 안내 문구는 몰입을 위해 기본 숨김(접이식 도움말). 필요할 때만 펼쳐 본다.
-cap = "지도 상단 토글 — ‘탐험’은 도시를 눌러 역사 설명을, ‘순행 그리기’는 강조 도시를 순서대로 눌러 순행로를 작성한 뒤 ‘채점’합니다. "
-cap += ("거리가 아니라 지형 이동 비용 기준 — 산·사막을 넘는 길이 비쌉니다." if terrain_on
-        else "거리는 실제 지리 좌표 기준.")
-with st.expander("ℹ️ 도움말", expanded=False):
-    st.caption(cap)
+# 하단 도움말 — 현재 게임 흐름(거시 순회 TSP + 미시 역참로 보급로)을 간결히. 몰입 위해 기본 접힘.
+terr_line = ("**지형 비용 켜짐** — 거리가 아니라 *이동 비용*(산·사막·계절·순행 주체 반영) 기준이라, 험지를 넘는 길이 비쌉니다."
+             if terrain_on else "**지형 비용 꺼짐** — 실제 지리 좌표상 *거리* 기준입니다.")
+with st.expander("ℹ️ 도움말 — 어떻게 하나요?", expanded=False):
+    st.markdown(
+        "제국의 도시들을 **가장 효율적으로 잇는** 두 단계 퍼즐입니다.\n\n"
+        "**① 순행로 짜기 (순회 문제·TSP)**  \n"
+        "지도 상단 **‘순행 그리기’**에서 강조된 도시를 **방문 순서대로** 클릭한 뒤 **‘채점’**하세요. "
+        "컴퓨터 최적해에 가까울수록 별 ★★★. **‘탐험’** 토글은 도시를 눌러 역사 설명만 봅니다.  \n"
+        + terr_line + "\n\n"
+        "**② 역참로 잇기 (최소 비용 보급로)**  \n"
+        "채점 후 **‘역참로 잇기’**로 각 구간의 보급선을 직접 잇습니다. **닿는(금색 테두리) 역참**을 클릭해 "
+        "출발→도착을 연결하고(잘못 고르면 그 역참을 다시 눌러 되돌리기), **개수는 자유 — 총비용이 적을수록** 별. "
+        "종류마다 다릅니다: **모린**(멀리·비쌈)·**테르겐**(가깝·저렴)·**나린**(중간). 사막은 보급이 짧게 닿으니 "
+        "강·오아시스를 따라 잇는 게 유리합니다. *(스테이지 우상단 **?** 버튼에 단계별 길잡이)*\n\n"
+        "**그 밖에** — 📖 백과사전(도시·인물·제도) · 🔊 소리 · ≡ 타이틀(모드 선택)."
+    )
