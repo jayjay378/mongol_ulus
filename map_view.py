@@ -39,10 +39,12 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
 <style>
   :root{ --parchment:#e9ddbf; --parchment-edge:#d8c8a0; --ink:#463827; --ink-soft:#6b5a3e;
     --route:#8a3d2a; --player:#2f6f7a; --gold:#b0822c; --sea:#a9bcb1; --ghost:#5a5f86; }
-  *{box-sizing:border-box; -webkit-user-select:none; user-select:none;} html,body{margin:0}
+  *{box-sizing:border-box; -webkit-user-select:none; user-select:none;} html,body{margin:0; height:100%;}
   body{ font-family:"Noto Serif KR",serif; color:var(--ink); background:transparent; }
-  .map-wrap{ position:relative; width:100%; }
-  svg.map{ display:block; width:100%; height:auto; cursor:grab; touch-action:none; }
+  /* map-wrap·지도가 iframe(=뷰포트에 맞춘) 높이를 채우고, 지도는 그 안에 비율 유지로 맞춤(letterbox). */
+  /* → relaystage·cityscene(absolute inset:0)와 opening(fixed)이 모두 화면에 꽉 맞아 하단이 짤리지 않음. */
+  .map-wrap{ position:relative; width:100%; height:100%; }
+  svg.map{ display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
   svg.map.drag{ cursor:grabbing; } svg.map .city{ cursor:pointer; } svg.map.drag .city{ cursor:grabbing; }
   .panel{ position:absolute; background:rgba(233,221,191,.94); border:1px solid var(--ink-soft);
     border-radius:3px; box-shadow:0 3px 12px rgba(0,0,0,.35); }
@@ -1280,5 +1282,24 @@ TEMPLATE = r"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
     var entered=null; try{ entered=localStorage.getItem("mongolEntered"); }catch(e){}
     if(entered==="sandbox") return;   // 샌드박스 진입 후 리런 → 타이틀 건너뜀(사이드바 조정 끊김 방지)
     if(STORY && OPENMAP && OPENMAP.nodes && window.__runTitle) window.__runTitle(STORY);
+  })();
+
+  // ====== 화면 비율 적응: 컴포넌트 iframe 높이를 브라우저 뷰포트에 맞춰 조정 ======
+  // 고정 760이 짧은 화면(노트북·작은 창)서 하단(오버레이 버튼)을 짤리게 함 → 뷰포트에 맞게 축소(필요 시).
+  // iframe 요소 높이를 줄이면 내부 viewport도 줄어 position:fixed inset:0 오버레이가 그대로 맞춰진다(타이틀·역참·연출 모두).
+  (function(){
+    function fit(){
+      try{ var pw=window.parent; if(!pw||pw===window) return;
+        var fr=pw.document.querySelectorAll("iframe"), me=null;
+        for(var i=0;i<fr.length;i++){ if(fr[i].contentWindow===window){ me=fr[i]; break; } }
+        if(!me) return;
+        var top=me.getBoundingClientRect().top;
+        var h=Math.round((pw.innerHeight||window.innerHeight)-top-6);
+        h=Math.max(440, Math.min(820, h));                 // 합리적 범위(짧은 화면=축소, 큰 화면=최대 820)
+        me.style.height=h+"px"; var c=me.parentElement; if(c) c.style.height=h+"px";
+      }catch(e){}
+    }
+    fit(); [80,250,500,1000,1800].forEach(function(ms){ setTimeout(fit, ms); });   // 헤더 높이 늦게 안정화 → 여러 시점 재적합
+    try{ var pw=window.parent; if(pw && !pw.__mongolFit){ pw.__mongolFit=1; pw.addEventListener("resize", fit); } }catch(e){}
   })();
 </script></body></html>"""
